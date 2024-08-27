@@ -63,6 +63,11 @@ export async function getState(self: ClaudeDevProvider) {
         }
     }
 
+    self.outputChannel.appendLine(`getState: apiProvider = ${apiProvider}`)
+    self.outputChannel.appendLine(`getState: gcProjectId = ${gcProjectId}`)
+    self.outputChannel.appendLine(`getState: gcRegion = ${gcRegion}`)
+    self.outputChannel.appendLine(`getState: gcServiceAccountKey = ${gcServiceAccountKey ? '(present)' : '(not present)'}`)
+
     return {
         apiConfiguration: {
             apiProvider,
@@ -74,6 +79,9 @@ export async function getState(self: ClaudeDevProvider) {
             awsRegion,
             koduApiKey,
             koduEmail,
+            gcProjectId,
+            gcRegion,
+            gcServiceAccountKey,
         },
         maxRequestsPerTask,
         lastShownAnnouncementId,

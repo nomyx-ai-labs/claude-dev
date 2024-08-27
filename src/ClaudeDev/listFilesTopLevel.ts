@@ -10,10 +10,8 @@ import Anthropic from "@anthropic-ai/sdk"
 const cwd =
 	vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) ?? path.join(os.homedir(), "Desktop")
 
+type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>
 
-    type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>
-
-    
 export async function listFilesTopLevel(self: ClaudeDev, relDirPath?: string): Promise<ToolResponse> {
     if (relDirPath === undefined) {
         await self.say(
@@ -25,11 +23,11 @@ export async function listFilesTopLevel(self: ClaudeDev, relDirPath?: string): P
     try {
         const absolutePath = path.resolve(cwd, relDirPath)
         const files = await listFiles(absolutePath, false)
-        const result = self.formatFilesList(absolutePath, files)
+        const result = formatFilesList(absolutePath, files)
 
         const message = JSON.stringify({
             tool: "listFilesTopLevel",
-            path: self.getReadablePath(relDirPath),
+            path: getReadablePath(relDirPath),
             content: result,
         } as ClaudeSayTool)
         if (self.alwaysAllowReadOnly) {
@@ -39,7 +37,7 @@ export async function listFilesTopLevel(self: ClaudeDev, relDirPath?: string): P
             if (response !== "yesButtonTapped") {
                 if (response === "messageResponse") {
                     await self.say("user_feedback", text, images)
-                    return self.formatIntoToolResponse(self.formatGenericToolFeedback(text), images)
+                    return `User feedback: ${text}`
                 }
                 return "The user denied this operation."
             }
@@ -56,4 +54,12 @@ export async function listFilesTopLevel(self: ClaudeDev, relDirPath?: string): P
         )
         return errorString
     }
+}
+
+function formatFilesList(basePath: string, files: string[]): string {
+    return files.map(file => path.relative(basePath, file)).join('\n');
+}
+
+function getReadablePath(relPath: string): string {
+    return path.join(cwd, relPath);
 }

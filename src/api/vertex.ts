@@ -2,7 +2,7 @@ import { AnthropicVertex } from "@anthropic-ai/vertex-sdk"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { ApiHandler, ApiHandlerMessageResponse, withoutImageData } from "."
 import { ApiHandlerOptions, ModelInfo, vertexDefaultModelId, VertexModelId, vertexModels, ApiModelId } from "../shared/api"
-import { GoogleAuth } from "google-auth-library"
+import { execSync } from 'child_process'
 
 // https://docs.anthropic.com/en/api/claude-on-vertex-ai
 export class VertexHandler implements ApiHandler {
@@ -12,17 +12,25 @@ export class VertexHandler implements ApiHandler {
 	constructor(options: ApiHandlerOptions) {
 		this.options = options
 		this.client = new AnthropicVertex({
-			googleAuth: this.options.gcServiceAccountKey
-				? new GoogleAuth({
-						credentials: JSON.parse(atob(this.options.gcServiceAccountKey)),
-						scopes: "https://www.googleapis.com/auth/cloud-platform",
-				  })
-				: undefined,
+			googleAuth: this.getGoogleAuthFromCLI(),
 			projectId: this.options.gcProjectId,
 			// Provide valid region for the model you are using.
 			// See also: https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude#regions
 			region: this.options.gcRegion,
 		})
+	}
+
+	private getGoogleAuthFromCLI() {
+		try {
+			// Execute gcloud command to get access token
+			const accessToken = execSync('gcloud auth print-access-token', { encoding: 'utf-8' }).trim()
+			return {
+				getAccessToken: async () => ({ token: accessToken })
+			}
+		} catch (error) {
+			console.error('Failed to get Google auth token from CLI:', error)
+			throw new Error('Failed to authenticate with Google. Make sure you are logged in with gcloud CLI.')
+		}
 	}
 
 	async createMessage(

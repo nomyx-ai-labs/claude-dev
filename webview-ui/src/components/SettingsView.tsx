@@ -11,7 +11,7 @@ import { validateApiConfiguration, validateMaxRequestsPerTask } from "../utils/v
 import { vscode } from "../utils/vscode"
 import ApiOptions from "./ApiOptions"
 
-const IS_DEV = false // FIXME: use flags when packaging
+const IS_DEV = true // Changed to true for debugging
 
 type SettingsViewProps = {
 	version: string
@@ -61,6 +61,7 @@ const SettingsView = ({
 		setMaxRequestsErrorMessage(maxRequestsValidationResult)
 
 		if (!apiValidationResult && !maxRequestsValidationResult) {
+			console.log("Submitting API configuration:", JSON.stringify(apiConfiguration, null, 2))
 			vscode.postMessage({ type: "apiConfiguration", apiConfiguration })
 			vscode.postMessage({ type: "maxRequestsPerTask", text: maxRequestsPerTask })
 			vscode.postMessage({ type: "customInstructions", text: customInstructions })
@@ -79,8 +80,16 @@ const SettingsView = ({
 		setMaxRequestsErrorMessage(undefined)
 	}, [maxRequestsPerTask])
 
+	useEffect(() => {
+		console.log("Current API configuration:", JSON.stringify(apiConfiguration, null, 2))
+	}, [apiConfiguration])
+
 	const handleResetState = () => {
 		vscode.postMessage({ type: "resetState" })
+	}
+
+	const handleLogState = () => {
+		vscode.postMessage({ type: "logState" })
 	}
 
 	return (
@@ -224,6 +233,9 @@ const SettingsView = ({
 						<div style={{ marginTop: "10px", marginBottom: "4px" }}>Debug</div>
 						<VSCodeButton onClick={handleResetState} style={{ marginTop: "5px", width: "auto" }}>
 							Reset State
+						</VSCodeButton>
+						<VSCodeButton onClick={handleLogState} style={{ marginTop: "5px", width: "auto" }}>
+							Log State
 						</VSCodeButton>
 						<p
 							style={{

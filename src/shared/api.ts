@@ -1,3 +1,9 @@
+import { AnthropicHandler } from "../api/anthropic"
+import { AwsBedrockHandler } from "../api/bedrock"
+import { OpenRouterHandler } from "../api/openrouter"
+import { KoduHandler } from "../api/kodu"
+import { VertexHandler } from "../api/vertex"
+
 export type ApiProvider = "anthropic" | "openrouter" | "bedrock" | "kodu" | "vertex"
 
 export interface ApiHandlerOptions {
@@ -241,3 +247,21 @@ export const vertexModels = {
 		outputPrice: 1.25,
 	},
 } as const satisfies Record<string, ModelInfo>
+
+export function buildApiHandler(configuration: ApiConfiguration) {
+	const { apiProvider, ...options } = configuration
+	switch (apiProvider) {
+		case "anthropic":
+			return new AnthropicHandler(options)
+		case "openrouter":
+			return new OpenRouterHandler(options)
+		case "bedrock":
+			return new AwsBedrockHandler(options)
+		case "kodu":
+			return new KoduHandler(options)
+		case "vertex":
+			return new VertexHandler(options)
+		default:
+			return new AnthropicHandler(options)
+	}
+}

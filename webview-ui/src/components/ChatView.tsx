@@ -1,4 +1,4 @@
-import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeButton, VSCodeLink, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import vsDarkPlus from "react-syntax-highlighter/dist/esm/styles/prism/vsc-dark-plus"
 import DynamicTextArea from "react-textarea-autosize"
@@ -18,6 +18,7 @@ import Thumbnails from "./Thumbnails"
 import { HistoryItem } from "../../../src/shared/HistoryItem"
 import { ApiConfiguration } from "../../../src/shared/api"
 import KoduPromo from "./KoduPromo"
+import { Prompt } from "../../../src/shared/Prompt"
 
 interface ChatViewProps {
 	version: string
@@ -78,6 +79,10 @@ const ChatView = ({
 	const virtuosoRef = useRef<VirtuosoHandle>(null)
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 	const [isTaskRunning, setIsTaskRunning] = useState(false)
+
+	// New state for structured prompts
+	const [prompts, setPrompts] = useState<Prompt[]>([])
+	const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null)
 
 	const toggleRowExpansion = (ts: number) => {
 		setExpandedRows((prev) => ({
@@ -237,7 +242,18 @@ const ChatView = ({
 		const text = inputValue.trim()
 		if (text || selectedImages.length > 0) {
 			if (messages.length === 0) {
-				vscode.postMessage({ type: "newTask", text, images: selectedImages })
+				if (selectedPrompt) {
+					const promptRequest = JSON.parse(selectedPrompt.request);
+					promptRequest.input = text;
+					vscode.postMessage({ 
+						type: "callPrompt", 
+						promptName: selectedPrompt.name, 
+						promptRequest: promptRequest,
+						images: selectedImages 
+					});
+				} else {
+					vscode.postMessage({ type: "newTask", text, images: selectedImages })
+				}
 			} else if (claudeAsk) {
 				switch (claudeAsk) {
 					case "followup":
@@ -399,6 +415,9 @@ const ChatView = ({
 						)
 					}
 					break
+				case "prompts":
+					setPrompts(message.prompts || [])
+					break
 			}
 		},
 		[isHidden, textAreaDisabled, enableButtons]
@@ -408,6 +427,7 @@ const ChatView = ({
 
 	useMount(() => {
 		textAreaRef.current?.focus()
+		vscode.postMessage({ type: "getPrompts" })
 	})
 
 	useEffect(() => {
@@ -460,9 +480,9 @@ const ChatView = ({
 		if (messages.at(-1)?.ask === "command_output") {
 			return ["Type input to command stdin...", true]
 		}
-		const text = task ? "Type a message..." : "Type your task here..."
+		const text = task ? "Type a message..." : selectedPrompt ? "Type your input for the selected prompt..." : "Type your task here..."
 		return [text, false]
-	}, [task, messages])
+	}, [task, messages, selectedPrompt])
 
 	const shouldDisableImages =
 		!selectedModelSupportsImages ||
@@ -592,7 +612,24 @@ const ChatView = ({
 					opacity: textAreaDisabled ? 0.5 : 1,
 					position: "relative",
 					display: "flex",
+					flexDirection: "column",
 				}}>
+				{!task && (
+					<VSCodeDropdown
+						style={{ marginBottom: "10px" }}
+						onChange={(e) => {
+							const target = e.target as HTMLSelectElement;
+							setSelectedPrompt(prompts.find(p => p.name === target.value) || null);
+						}}
+					>
+						<VSCodeOption value="">Select a prompt (optional)</VSCodeOption>
+						{prompts.map((prompt) => (
+							<VSCodeOption key={prompt.name} value={prompt.name}>
+								{prompt.name}
+							</VSCodeOption>
+						))}
+					</VSCodeDropdown>
+				)}
 				{!isTextAreaFocused && (
 					<div
 						style={{

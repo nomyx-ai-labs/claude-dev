@@ -8,11 +8,12 @@
   <a href="https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev" target="_blank"><strong>Download VSCode Extension</strong></a> | <a href="https://discord.gg/claudedev" target="_blank"><strong>Join the Discord</strong></a>
 </p>
 
-Thanks to [Claude 3.5 Sonnet's agentic coding capabilities](https://www-cdn.anthropic.com/fed9cc193a14b84131812372d8d5857f8f304c52/Model_Card_Claude_3_Addendum.pdf) Claude Dev can handle complex software development tasks step-by-step. With tools that let him create & edit files, explore complex projects, and execute terminal commands (after you grant permission), he can assist you in ways that go beyond simple code completion or tech support. While autonomous AI scripts traditionally run in sandboxed environments, Claude Dev provides a human-in-the-loop GUI to supervise every file changed and command executed, providing a safe and accessible way to explore the potential of agentic AI.
+Thanks to [Claude 3.5 Sonnet's agentic coding capabilities](https://www-cdn.anthropic.com/fed9cc193a14b84131812372d8d5857f8f304c52/Model_Card_Claude_3_Addendum.pdf) Claude Dev can handle complex software development tasks step-by-step. With tools that let him create & edit files, explore complex projects, execute terminal commands, and now debug code (after you grant permission), he can assist you in ways that go beyond simple code completion or tech support. While autonomous AI scripts traditionally run in sandboxed environments, Claude Dev provides a human-in-the-loop GUI to supervise every file changed and command executed, providing a safe and accessible way to explore the potential of agentic AI.
 
 -   Paste images in chat to use Claude's vision capabilities and turn mockups into fully functional applications or fix bugs with screenshots
 -   Inspect diffs of every change Claude makes right in the editor, and provide feedback until you're satisfied with the result
 -   Runs CLI commands directly in chat, so you never have to open a terminal yourself (+ respond to interactive commands by sending a message)
+-   Debug your code with Claude's assistance, setting breakpoints, inspecting variables, and stepping through execution
 -   Presents permission buttons (i.e. 'Approve terminal command') before tool use or sending information to the API
 -   Keep track of total tokens and API usage cost for the entire task loop and individual requests
 -   Set a maximum # of API requests allowed for a task before being prompted for permission to proceed
@@ -36,6 +37,63 @@ Claude Dev has access to the following capabilities:
 6. **`write_to_file`**: Write content to a file at the specified path, automatically creating any necessary directories
 7. **`ask_followup_question`**: Ask the user a question to gather additional information needed to complete a task (due to the autonomous nature of the program, this isn't a typical chatbot–Claude Dev must explicitly interrupt his task loop to ask for more information)
 8. **`attempt_completion`**: Present the result to the user after completing a task, potentially with a terminal command to kickoff a demonstration
+
+### Debugging Capabilities
+
+Claude Dev now includes powerful debugging tools that allow it to assist you in identifying and fixing issues in your code. These new capabilities include:
+
+1. **Debug Session Management**: 
+   - Start, stop, pause, and resume debugging sessions
+   - Step over, into, and out of code
+
+2. **Breakpoint Management**: 
+   - Add breakpoints to specific lines in files
+   - Remove breakpoints
+   - List all current breakpoints
+
+3. **State Inspection**: 
+   - View the current call stack
+   - Inspect variables in the current scope
+   - Evaluate expressions in the current context
+
+4. **Code Navigation**: 
+   - Open specific files at given line and column numbers
+   - Retrieve source code content
+
+5. **Application Interaction**: 
+   - Send input to the debugged application
+   - Retrieve output from the debugged application
+
+These debugging tools allow Claude to provide more comprehensive assistance in troubleshooting and optimizing your code. When you encounter a bug or need to understand the flow of your program, Claude can now guide you through the debugging process, helping you set breakpoints, inspect variables, and step through the code execution.
+
+To use the debugging features:
+1. Start a debugging session by asking Claude to debug your code
+2. Claude will guide you through setting breakpoints and starting the debug session
+3. Use the debugging controls in the UI to step through your code
+4. Ask Claude to inspect variables, evaluate expressions, or explain the current state of your program
+5. Claude can suggest fixes or optimizations based on what it observes during the debugging process
+
+Remember, Claude will always ask for your permission before executing any debugging commands, ensuring you maintain control over the debugging process.
+
+### Google Cloud Authentication
+
+For tasks that require Google Cloud authentication (such as using the Vertex API), Claude Dev now uses the `gcloud` CLI tool to obtain authentication tokens. This approach provides a more secure and flexible way to authenticate with Google Cloud services. To use this feature:
+
+1. Make sure you have the `gcloud` CLI tool installed on your system. You can download it from the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) page.
+
+2. Authenticate with Google Cloud by running the following command in your terminal:
+   ```
+   gcloud auth login
+   ```
+
+3. Set the project you want to use:
+   ```
+   gcloud config set project YOUR_PROJECT_ID
+   ```
+
+4. When Claude Dev needs to authenticate with Google Cloud, it will automatically use the `gcloud` CLI to obtain the necessary tokens.
+
+This method ensures that your Google Cloud credentials are managed securely by the official Google Cloud SDK, and Claude Dev doesn't need to handle or store any sensitive authentication information.
 
 ### Working in Existing Projects
 

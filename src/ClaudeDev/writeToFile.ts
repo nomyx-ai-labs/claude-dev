@@ -13,7 +13,6 @@ type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlo
 const cwd =
 	vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) ?? path.join(os.homedir(), "Desktop")
 
-
 export async function writeToFile(self: ClaudeDev, relPath?: string, newContent?: string, isLast: boolean = true): Promise<ToolResponse> {
     if (relPath === undefined) {
         await self.say(
@@ -24,7 +23,6 @@ export async function writeToFile(self: ClaudeDev, relPath?: string, newContent?
     }
 
     if (newContent === undefined) {
-        // Special message for this case since this tends to happen the most
         await self.say(
             "error",
             `Claude tried to use write_to_file for '${relPath}' without value for required parameter 'content'. This is likely due to output token limits. Retrying...`
@@ -41,13 +39,10 @@ export async function writeToFile(self: ClaudeDev, relPath?: string, newContent?
 
         if (fileExists) {
             const originalContent = await fs.readFile(absolutePath, "utf-8")
-            // fix issue where claude always removes newline from the file
             if (originalContent.endsWith("\n") && !newContent.endsWith("\n")) {
                 newContent += "\n"
             }
-            // condensed patch to return to claude
             const diffResult = diff.createPatch(absolutePath, originalContent, newContent)
-            // full diff representation for webview
             const diffRepresentation = diff
                 .diffLines(originalContent, newContent)
                 .map((part) => {
@@ -59,13 +54,10 @@ export async function writeToFile(self: ClaudeDev, relPath?: string, newContent?
                 })
                 .join("")
 
-            // Create virtual document with new file, then open diff editor
             const fileName = path.basename(absolutePath)
             vscode.commands.executeCommand(
                 "vscode.diff",
                 vscode.Uri.file(absolutePath),
-                // to create a virtual doc we use a uri scheme registered in extension.ts, which then converts this base64 content into a text document
-                // (providing file name with extension in the uri lets vscode know the language of the file and apply syntax highlighting)
                 vscode.Uri.parse(`claude-dev-diff:${fileName}`).with({
                     query: Buffer.from(newContent).toString("base64"),
                 }),
@@ -76,7 +68,7 @@ export async function writeToFile(self: ClaudeDev, relPath?: string, newContent?
                 "tool",
                 JSON.stringify({
                     tool: "editedExistingFile",
-                    path: self.getReadablePath(relPath),
+                    path: getReadablePath(relPath),
                     diff: diffRepresentation,
                 } as ClaudeSayTool)
             )
@@ -86,12 +78,11 @@ export async function writeToFile(self: ClaudeDev, relPath?: string, newContent?
                 }
                 if (response === "messageResponse") {
                     await self.say("user_feedback", text, images)
-                    return self.formatIntoToolResponse(self.formatGenericToolFeedback(text), images)
+                    return `User feedback: ${text}`
                 }
                 return "The user denied this operation."
             }
             await fs.writeFile(absolutePath, newContent)
-            // Finish by opening the edited file in the editor
             await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), { preview: false })
             if (isLast) {
                 await self.closeDiffViews()
@@ -113,7 +104,7 @@ export async function writeToFile(self: ClaudeDev, relPath?: string, newContent?
                 "tool",
                 JSON.stringify({
                     tool: "newFileCreated",
-                    path: self.getReadablePath(relPath),
+                    path: getReadablePath(relPath),
                     content: newContent,
                 } as ClaudeSayTool)
             )
@@ -123,7 +114,7 @@ export async function writeToFile(self: ClaudeDev, relPath?: string, newContent?
                 }
                 if (response === "messageResponse") {
                     await self.say("user_feedback", text, images)
-                    return self.formatIntoToolResponse(self.formatGenericToolFeedback(text), images)
+                    return `User feedback: ${text}`
                 }
                 return "The user denied this operation."
             }
@@ -143,4 +134,8 @@ export async function writeToFile(self: ClaudeDev, relPath?: string, newContent?
         )
         return errorString
     }
+}
+
+function getReadablePath(relPath: string): string {
+    return path.join(cwd, relPath);
 }

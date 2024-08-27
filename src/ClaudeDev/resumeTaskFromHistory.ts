@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { cwd } from "process"
 import { ClaudeDev } from "../ClaudeDev"
-import { ClaudeAsk } from "../shared/ExtensionMessage"
+import { ClaudeAsk, ClaudeMessage } from "../shared/ExtensionMessage"
 import { findLastIndex } from "../utils"
 
 type UserContent = Array<
@@ -9,15 +9,15 @@ type UserContent = Array<
 >
 
 export async function resumeTaskFromHistory(self: ClaudeDev) {
-    const modifiedClaudeMessages = await self.getSavedClaudeMessages()
+    const modifiedClaudeMessages = [...self.claudeMessages];
 
     // Need to modify claude messages for good ux, i.e. if the last message is an api_request_started, then remove it otherwise the user will think the request is still loading
     const lastApiReqStartedIndex = modifiedClaudeMessages.reduce(
-        (lastIndex, m, index) => (m.type === "say" && m.say === "api_req_started" ? index : lastIndex),
+        (lastIndex: number, m: ClaudeMessage, index: number) => (m.type === "say" && m.say === "api_req_started" ? index : lastIndex),
         -1
     )
     const lastApiReqFinishedIndex = modifiedClaudeMessages.reduce(
-        (lastIndex, m, index) => (m.type === "say" && m.say === "api_req_finished" ? index : lastIndex),
+        (lastIndex: number, m: ClaudeMessage, index: number) => (m.type === "say" && m.say === "api_req_finished" ? index : lastIndex),
         -1
     )
     if (lastApiReqStartedIndex > lastApiReqFinishedIndex && lastApiReqStartedIndex !== -1) {
@@ -27,24 +27,23 @@ export async function resumeTaskFromHistory(self: ClaudeDev) {
     // Remove any resume messages that may have been added before
     const lastRelevantMessageIndex = findLastIndex(
         modifiedClaudeMessages,
-        (m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")
+        (m: ClaudeMessage) => !(m.type === "ask" && (m.ask === "resume_task" || m.ask === "resume_completed_task"))
     )
     if (lastRelevantMessageIndex !== -1) {
         modifiedClaudeMessages.splice(lastRelevantMessageIndex + 1)
     }
 
-    await self.overwriteClaudeMessages(modifiedClaudeMessages)
-    self.claudeMessages = await self.getSavedClaudeMessages()
+    self.claudeMessages = modifiedClaudeMessages;
 
     // Now present the claude messages to the user and ask if they want to resume
 
     const lastClaudeMessage = self.claudeMessages
         .slice()
         .reverse()
-        .find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")) // could be multiple resume tasks
+        .find((m: ClaudeMessage) => !(m.type === "ask" && (m.ask === "resume_task" || m.ask === "resume_completed_task"))) // could be multiple resume tasks
 
     let askType: ClaudeAsk
-    if (lastClaudeMessage?.ask === "completion_result") {
+    if (lastClaudeMessage?.type === "ask" && lastClaudeMessage.ask === "completion_result") {
         askType = "resume_completed_task"
     } else {
         askType = "resume_task"
@@ -54,9 +53,23 @@ export async function resumeTaskFromHistory(self: ClaudeDev) {
 
     let newUserContent: UserContent = []
     if (response === "messageResponse") {
-        await self.say("user_feedback", text, images)
+        await self.say("user_feedback", text || "", images)
         if (images && images.length > 0) {
-            newUserContent.push(...self.formatImagesIntoBlocks(images))
+            newUserContent.push(...images.map(img => {
+                const mediaType = img.startsWith('data:image/png') ? "image/png" as const : 
+                                  img.startsWith('data:image/jpeg') ? "image/jpeg" as const : 
+                                  img.startsWith('data:image/gif') ? "image/gif" as const : 
+                                  img.startsWith('data:image/webp') ? "image/webp" as const : 
+                                  "image/png" as const; // Default to PNG if unable to determine
+                return {
+                    type: "image" as const,
+                    source: {
+                        type: "base64" as const,
+                        media_type: mediaType,
+                        data: img.replace(/^data:image\/\w+;base64,/, '') // Remove data URL prefix if present
+                    }
+                }
+            }))
         }
         if (text) {
             newUserContent.push({ type: "text", text })
@@ -70,8 +83,7 @@ export async function resumeTaskFromHistory(self: ClaudeDev) {
 
     // if the last message is a user message, we can need to get the assistant message before it to see if it made tool calls, and if so, fill in the remaining tool responses with 'interrupted'
 
-    const existingApiConversationHistory: Anthropic.Messages.MessageParam[] =
-        await self.getSavedApiConversationHistory()
+    const existingApiConversationHistory: Anthropic.Messages.MessageParam[] = self.apiConversationHistory;
 
     let modifiedOldUserContent: UserContent
     let modifiedApiConversationHistory: Anthropic.Messages.MessageParam[]
@@ -179,12 +191,12 @@ export async function resumeTaskFromHistory(self: ClaudeDev) {
         (newUserContentText
             ? `\n\nNew instructions for task continuation:\n<user_message>\n${newUserContentText}\n</user_message>\n`
             : "") +
-        `\n\n${self.getPotentiallyRelevantDetails()}`
+        `\n\nPotentially relevant details: [Insert relevant project details here]`
 
     const combinedModifiedOldUserContentWithNewUserContent: UserContent = (
         modifiedOldUserContent.filter((block) => block.type !== "text") as UserContent
     ).concat([{ type: "text", text: combinedText }])
 
-    await self.overwriteApiConversationHistory(modifiedApiConversationHistory)
-    await self.initiateTaskLoop(combinedModifiedOldUserContentWithNewUserContent)
+    self.apiConversationHistory = modifiedApiConversationHistory;
+    await self.ask("resume_task", combinedText);
 }

@@ -1,11 +1,9 @@
-// type that represents json data that is sent from extension to webview, called ExtensionMessage and has 'type' enum which can be 'plusButtonTapped' or 'settingsButtonTapped' or 'hello'
-
 import { ApiConfiguration } from "./api"
 import { HistoryItem } from "./HistoryItem"
+import { Prompt } from "./Prompt"
 
-// webview will hold state
 export interface ExtensionMessage {
-	type: "action" | "state" | "selectedImages"
+	type: "action" | "state" | "selectedImages" | "prompts" | "promptSearchResults" | "promptCallResult"
 	text?: string
 	action?:
 		| "chatButtonTapped"
@@ -14,9 +12,25 @@ export interface ExtensionMessage {
 		| "didBecomeVisible"
 		| "koduAuthenticated"
 		| "koduCreditsFetched"
+		| "promptManagementButtonTapped"
+		| "debugSessionStarted"
+		| "debugSessionEnded"
+		| "debugSessionPaused"
+		| "breakpointAdded"
+		| "breakpointRemoved"
+		| "callStackUpdated"
+		| "variablesUpdated"
+		| "expressionEvaluated"
+		| "debuggerButtonTapped"
+		| "getBreakpoints"
 	state?: ExtensionState
 	images?: string[]
+	prompts?: Prompt[]
+	promptCallResult?: string
+	data?: any // Add this line to include the data property
 }
+
+export type ClaudeAction = ExtensionMessage['action']
 
 export interface ExtensionState {
 	version: string

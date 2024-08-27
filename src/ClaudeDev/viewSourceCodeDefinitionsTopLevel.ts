@@ -26,7 +26,7 @@ export async function viewSourceCodeDefinitionsTopLevel(self: ClaudeDev, relDirP
 
         const message = JSON.stringify({
             tool: "viewSourceCodeDefinitionsTopLevel",
-            path: self.getReadablePath(relDirPath),
+            path: getReadablePath(relDirPath),
             content: result,
         } as ClaudeSayTool)
         if (self.alwaysAllowReadOnly) {
@@ -36,7 +36,7 @@ export async function viewSourceCodeDefinitionsTopLevel(self: ClaudeDev, relDirP
             if (response !== "yesButtonTapped") {
                 if (response === "messageResponse") {
                     await self.say("user_feedback", text, images)
-                    return self.formatIntoToolResponse(self.formatGenericToolFeedback(text), images)
+                    return `User feedback: ${text}`
                 }
                 return "The user denied this operation."
             }
@@ -53,4 +53,8 @@ export async function viewSourceCodeDefinitionsTopLevel(self: ClaudeDev, relDirP
         )
         return errorString
     }
+}
+
+function getReadablePath(relPath: string): string {
+    return path.join(cwd, relPath);
 }

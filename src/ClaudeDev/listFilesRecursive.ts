@@ -23,11 +23,11 @@ export async function listFilesRecursive(self: ClaudeDev, relDirPath?: string): 
     try {
         const absolutePath = path.resolve(cwd, relDirPath)
         const files = await listFiles(absolutePath, true)
-        const result = self.formatFilesList(absolutePath, files)
+        const result = formatFilesList(absolutePath, files)
 
         const message = JSON.stringify({
             tool: "listFilesRecursive",
-            path: self.getReadablePath(relDirPath),
+            path: getReadablePath(relDirPath),
             content: result,
         } as ClaudeSayTool)
         if (self.alwaysAllowReadOnly) {
@@ -37,7 +37,7 @@ export async function listFilesRecursive(self: ClaudeDev, relDirPath?: string): 
             if (response !== "yesButtonTapped") {
                 if (response === "messageResponse") {
                     await self.say("user_feedback", text, images)
-                    return self.formatIntoToolResponse(self.formatGenericToolFeedback(text), images)
+                    return `User feedback: ${text}`
                 }
                 return "The user denied this operation."
             }
@@ -52,4 +52,12 @@ export async function listFilesRecursive(self: ClaudeDev, relDirPath?: string): 
         )
         return errorString
     }
+}
+
+function formatFilesList(basePath: string, files: string[]): string {
+    return files.map(file => path.relative(basePath, file)).join('\n');
+}
+
+function getReadablePath(relPath: string): string {
+    return path.join(cwd, relPath);
 }

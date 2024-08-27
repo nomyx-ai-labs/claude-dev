@@ -1,8 +1,8 @@
 {
   "name": "claude-dev",
   "displayName": "Claude Dev",
-  "description": "Autonomous coding agent right in your IDE, capable of creating/editing files, executing commands, and more with your permission every step of the way.",
-  "version": "1.4.14",
+  "description": "Autonomous coding agent right in your IDE, capable of creating/editing files, executing commands, debugging, and more with your permission every step of the way.",
+  "version": "1.5.0",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.84.0"
@@ -24,7 +24,8 @@
     "Claude",
     "agentic",
     "productivity",
-    "automation"
+    "automation",
+    "debugging"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
@@ -72,6 +73,36 @@
         "command": "claude-dev.openInNewTab",
         "title": "Open In New Tab",
         "category": "Claude Dev"
+      },
+      {
+        "command": "claude-dev.promptManagementButtonTapped",
+        "title": "Manage Prompts",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "claude-dev.startDebugging",
+        "title": "Start Debugging",
+        "category": "Claude Dev"
+      },
+      {
+        "command": "claude-dev.stopDebugging",
+        "title": "Stop Debugging",
+        "category": "Claude Dev"
+      },
+      {
+        "command": "claude-dev.pauseDebugging",
+        "title": "Pause Debugging",
+        "category": "Claude Dev"
+      },
+      {
+        "command": "claude-dev.addBreakpoint",
+        "title": "Add Breakpoint",
+        "category": "Claude Dev"
+      },
+      {
+        "command": "claude-dev.removeBreakpoint",
+        "title": "Remove Breakpoint",
+        "category": "Claude Dev"
       }
     ],
     "menus": {
@@ -94,6 +125,11 @@
         {
           "command": "claude-dev.settingsButtonTapped",
           "group": "navigation@4",
+          "when": "view == claude-dev.SidebarProvider"
+        },
+        {
+          "command": "claude-dev.promptManagementButtonTapped",
+          "group": "navigation@5",
           "when": "view == claude-dev.SidebarProvider"
         }
       ]
@@ -130,6 +166,7 @@
     "eslint": "^8.57.0",
     "npm-run-all": "^4.1.5",
     "rewire": "^7.0.0",
+    "stream-browserify": "^3.0.0",
     "typescript": "^5.4.5"
   },
   "dependencies": {
@@ -139,6 +176,7 @@
     "@anthropic-ai/vertex-sdk": "^0.4.1",
     "@kodu-ai/cloud-api": "^1.0.1",
     "@vscode/codicons": "^0.0.36",
+    "@vscode/debugprotocol": "^1.66.0",
     "axios": "^1.7.4",
     "default-shell": "^2.2.0",
     "delay": "^6.0.0",

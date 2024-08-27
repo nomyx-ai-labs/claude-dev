@@ -9,18 +9,20 @@ import ChatView from "./components/ChatView"
 import HistoryView from "./components/HistoryView"
 import SettingsView from "./components/SettingsView"
 import WelcomeView from "./components/WelcomeView"
+import { PromptManagementView } from "./components/PromptManagementView"
 import { vscode } from "./utils/vscode"
-
-/*
-The contents of webviews however are created when the webview becomes visible and destroyed when the webview is moved into the background. Any state inside the webview will be lost when the webview is moved to a background tab.
-
-The best way to solve this is to make your webview stateless. Use message passing to save off the webview's state and then restore the state when the webview becomes visible again.
-*/
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
+import DebugControls from "./components/DebugControls"
+import BreakpointList from "./components/BreakpointList"
+import VariableInspector from "./components/VariableInspector"
+import CallStackView from "./components/CallStackView"
 
 const App: React.FC = () => {
 	const [didHydrateState, setDidHydrateState] = useState(false)
 	const [showSettings, setShowSettings] = useState(false)
 	const [showHistory, setShowHistory] = useState(false)
+	const [showPromptManagement, setShowPromptManagement] = useState(false)
+	const [showDebugger, setShowDebugger] = useState(false)
 	const [showWelcome, setShowWelcome] = useState<boolean>(false)
 	const [version, setVersion] = useState<string>("")
 	const [apiConfiguration, setApiConfiguration] = useState<ApiConfiguration | undefined>(undefined)
@@ -73,7 +75,6 @@ const App: React.FC = () => {
 					setClaudeMessages(message.state!.claudeMessages)
 					setTaskHistory(message.state!.taskHistory)
 					setKoduCredits(message.state!.koduCredits)
-					// don't update showAnnouncement to false if shouldShowAnnouncement is false
 					if (message.state!.shouldShowAnnouncement) {
 						setShowAnnouncement(true)
 					}
@@ -85,14 +86,32 @@ const App: React.FC = () => {
 						case "settingsButtonTapped":
 							setShowSettings(true)
 							setShowHistory(false)
+							setShowPromptManagement(false)
+							setShowDebugger(false)
 							break
 						case "historyButtonTapped":
 							setShowSettings(false)
 							setShowHistory(true)
+							setShowPromptManagement(false)
+							setShowDebugger(false)
+							break
+						case "promptManagementButtonTapped":
+							setShowSettings(false)
+							setShowHistory(false)
+							setShowPromptManagement(true)
+							setShowDebugger(false)
+							break
+						case "debuggerButtonTapped":
+							setShowSettings(false)
+							setShowHistory(false)
+							setShowPromptManagement(false)
+							setShowDebugger(true)
 							break
 						case "chatButtonTapped":
 							setShowSettings(false)
 							setShowHistory(false)
+							setShowPromptManagement(false)
+							setShowDebugger(false)
 							break
 						case "koduCreditsFetched":
 							setKoduCredits(message.state!.koduCredits)
@@ -101,12 +120,13 @@ const App: React.FC = () => {
 							if (!didAuthKoduFromWelcome) {
 								setShowSettings(true)
 								setShowHistory(false)
+								setShowPromptManagement(false)
+								setShowDebugger(false)
 							}
 							break
 					}
 					break
 			}
-			// (react-use takes care of not registering the same listener multiple times even if this callback is updated.)
 		},
 		[didAuthKoduFromWelcome]
 	)
@@ -132,6 +152,12 @@ const App: React.FC = () => {
 				/>
 			) : (
 				<>
+					<div className="button-container">
+						<VSCodeButton onClick={() => setShowSettings(true)}>Settings</VSCodeButton>
+						<VSCodeButton onClick={() => setShowHistory(true)}>History</VSCodeButton>
+						<VSCodeButton onClick={() => setShowPromptManagement(true)}>Manage Prompts</VSCodeButton>
+						<VSCodeButton onClick={() => setShowDebugger(true)}>Debugger</VSCodeButton>
+					</div>
 					{showSettings && (
 						<SettingsView
 							version={version}
@@ -153,7 +179,15 @@ const App: React.FC = () => {
 						/>
 					)}
 					{showHistory && <HistoryView taskHistory={taskHistory} onDone={() => setShowHistory(false)} />}
-					{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
+					{showPromptManagement && <PromptManagementView vscode={vscode} />}
+					{showDebugger && (
+						<div className="debugger-view">
+							<DebugControls />
+							<BreakpointList />
+							<VariableInspector />
+							<CallStackView />
+						</div>
+					)}
 					<ChatView
 						version={version}
 						messages={claudeMessages}
@@ -161,8 +195,9 @@ const App: React.FC = () => {
 						showHistoryView={() => {
 							setShowSettings(false)
 							setShowHistory(true)
+							setShowPromptManagement(false)
+							setShowDebugger(false)
 						}}
-						isHidden={showSettings || showHistory}
 						vscodeThemeName={vscodeThemeName}
 						showAnnouncement={showAnnouncement}
 						selectedModelSupportsImages={selectedModelInfo.supportsImages}
@@ -177,6 +212,7 @@ const App: React.FC = () => {
 						koduCredits={koduCredits}
 						requireManualConfirmation={requireManualConfirmation}
 						autoStartTask={autoStartTask}
+						isHidden={showSettings || showHistory || showPromptManagement || showDebugger}
 					/>
 				</>
 			)}

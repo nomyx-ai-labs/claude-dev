@@ -3,6 +3,10 @@
 import * as vscode from "vscode"
 import { ClaudeDevProvider } from "./providers/ClaudeDevProvider"
 import { resolveWebviewView } from "./providers/ClaudeDevProvider/resolveWebviewView"
+import { StructuredPromptManager } from "./api/structuredPromptManager"
+import { buildApiHandler } from "./api"
+import { ApiProvider } from "./shared/api"
+import { debuggerController } from "./debugger/debuggerController"
 
 /*
 Built using https://github.com/microsoft/vscode-webview-ui-toolkit
@@ -14,6 +18,7 @@ https://github.com/microsoft/vscode-webview-ui-toolkit-samples/tree/main/framewo
 */
 
 let outputChannel: vscode.OutputChannel
+let structuredPromptManager: StructuredPromptManager
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -26,6 +31,11 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(outputChannel)
 
 	outputChannel.appendLine("Claude Dev extension activated")
+
+	// TODO: Get the actual API configuration from your settings
+	const apiConfiguration = { apiProvider: "anthropic" as ApiProvider };
+	const apiHandler = buildApiHandler(apiConfiguration)
+	structuredPromptManager = new StructuredPromptManager(apiHandler)
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
@@ -91,6 +101,43 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand("claude-dev.historyButtonTapped", () => {
 			sidebarProvider.postMessageToWebview({ type: "action", action: "historyButtonTapped" })
+		})
+	)
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("claude-dev.promptManagementButtonTapped", () => {
+			sidebarProvider.postMessageToWebview({ type: "action", action: "promptManagementButtonTapped" })
+		})
+	)
+
+	// Register new debugging commands
+	context.subscriptions.push(
+		vscode.commands.registerCommand("claude-dev.startDebugging", async (config: vscode.DebugConfiguration) => {
+			await debuggerController.startDebugging(config)
+		})
+	)
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("claude-dev.stopDebugging", () => {
+			debuggerController.stopDebugging()
+		})
+	)
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("claude-dev.pauseDebugging", () => {
+			debuggerController.pauseDebugging()
+		})
+	)
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("claude-dev.addBreakpoint", (location: vscode.Location) => {
+			debuggerController.addBreakpoint(location)
+		})
+	)
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("claude-dev.removeBreakpoint", (breakpoint: vscode.Breakpoint) => {
+			debuggerController.removeBreakpoint(breakpoint)
 		})
 	)
 
