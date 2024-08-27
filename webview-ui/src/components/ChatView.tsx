@@ -34,6 +34,8 @@ interface ChatViewProps {
 	vscodeUriScheme?: string
 	shouldShowKoduPromo: boolean
 	koduCredits?: number
+	requireManualConfirmation: boolean
+	autoStartTask: boolean
 }
 
 const MAX_IMAGES_PER_MESSAGE = 20 // Anthropic limits to 20 images
@@ -53,11 +55,11 @@ const ChatView = ({
 	vscodeUriScheme,
 	shouldShowKoduPromo,
 	koduCredits,
+	requireManualConfirmation,
+	autoStartTask,
 }: ChatViewProps) => {
-	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
-	const task = messages.length > 0 ? messages[0] : undefined // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see ClaudeDev.abort)
+	const task = messages.length > 0 ? messages[0] : undefined
 	const modifiedMessages = useMemo(() => combineApiRequests(combineCommandSequences(messages.slice(1))), [messages])
-	// has to be after api_req_finished are all reduced into api_req_started messages
 	const apiMetrics = useMemo(() => getApiMetrics(modifiedMessages), [modifiedMessages])
 
 	const [inputValue, setInputValue] = useState("")
@@ -67,7 +69,6 @@ const ChatView = ({
 	const [selectedImages, setSelectedImages] = useState<string[]>([])
 	const [thumbnailsHeight, setThumbnailsHeight] = useState(0)
 
-	// we need to hold on to the ask because useEffect > lastMessage will always let us know when an ask comes in and handle it, but by the time handleMessage is called, the last message might not be the ask anymore (it could be a say that followed)
 	const [claudeAsk, setClaudeAsk] = useState<ClaudeAsk | undefined>(undefined)
 
 	const [enableButtons, setEnableButtons] = useState<boolean>(false)
@@ -76,6 +77,7 @@ const ChatView = ({
 	const [syntaxHighlighterStyle, setSyntaxHighlighterStyle] = useState(vsDarkPlus)
 	const virtuosoRef = useRef<VirtuosoHandle>(null)
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
+	const [isTaskRunning, setIsTaskRunning] = useState(false)
 
 	const toggleRowExpansion = (ts: number) => {
 		setExpandedRows((prev) => ({
@@ -93,11 +95,6 @@ const ChatView = ({
 	}, [vscodeThemeName])
 
 	useEffect(() => {
-		// if last message is an ask, show user ask UI
-
-		// if user finished a task, then start a new task with a new conversation history since in this moment that the extension is waiting for user response, the user could close the extension and the conversation history would be lost.
-		// basically as long as a task is active, the conversation history will be persisted
-
 		const lastMessage = messages.at(-1)
 		if (lastMessage) {
 			switch (lastMessage.type) {
@@ -106,52 +103,71 @@ const ChatView = ({
 						case "request_limit_reached":
 							setTextAreaDisabled(true)
 							setClaudeAsk("request_limit_reached")
-							setEnableButtons(true)
+							setEnableButtons(requireManualConfirmation)
 							setPrimaryButtonText("Proceed")
 							setSecondaryButtonText("Start New Task")
+							setIsTaskRunning(true)
+							if (!requireManualConfirmation) {
+								handlePrimaryButtonClick()
+							}
 							break
 						case "api_req_failed":
 							setTextAreaDisabled(true)
 							setClaudeAsk("api_req_failed")
-							setEnableButtons(true)
+							setEnableButtons(requireManualConfirmation)
 							setPrimaryButtonText("Retry")
 							setSecondaryButtonText("Start New Task")
+							setIsTaskRunning(false)
+							if (!requireManualConfirmation) {
+								handlePrimaryButtonClick()
+							}
 							break
 						case "followup":
 							setTextAreaDisabled(false)
 							setClaudeAsk("followup")
 							setEnableButtons(false)
-							// setPrimaryButtonText(undefined)
-							// setSecondaryButtonText(undefined)
+							setIsTaskRunning(true)
 							break
 						case "tool":
 							setTextAreaDisabled(false)
 							setClaudeAsk("tool")
-							setEnableButtons(true)
+							setEnableButtons(requireManualConfirmation)
 							setPrimaryButtonText("Approve")
 							setSecondaryButtonText("Reject")
+							setIsTaskRunning(true)
+							if (!requireManualConfirmation) {
+								handlePrimaryButtonClick()
+							}
 							break
 						case "command":
 							setTextAreaDisabled(false)
 							setClaudeAsk("command")
-							setEnableButtons(true)
+							setEnableButtons(requireManualConfirmation)
 							setPrimaryButtonText("Run Command")
 							setSecondaryButtonText("Reject")
+							setIsTaskRunning(true)
+							if (!requireManualConfirmation) {
+								handlePrimaryButtonClick()
+							}
 							break
 						case "command_output":
 							setTextAreaDisabled(false)
 							setClaudeAsk("command_output")
-							setEnableButtons(true)
+							setEnableButtons(requireManualConfirmation)
 							setPrimaryButtonText("Exit Command")
 							setSecondaryButtonText(undefined)
+							setIsTaskRunning(true)
+							if (!requireManualConfirmation) {
+								handlePrimaryButtonClick()
+							}
 							break
 						case "completion_result":
-							// extension waiting for feedback. but we can just present a new task button
 							setTextAreaDisabled(false)
 							setClaudeAsk("completion_result")
 							setEnableButtons(true)
 							setPrimaryButtonText("Start New Task")
 							setSecondaryButtonText(undefined)
+							setIsTaskRunning(false)
 							break
 						case "resume_task":
 							setTextAreaDisabled(false)
@@ -159,6 +175,7 @@ const ChatView = ({
 							setEnableButtons(true)
 							setPrimaryButtonText("Resume Task")
 							setSecondaryButtonText(undefined)
+							setIsTaskRunning(false)
 							break
 						case "resume_completed_task":
 							setTextAreaDisabled(false)
@@ -166,21 +183,21 @@ const ChatView = ({
 							setEnableButtons(true)
 							setPrimaryButtonText("Start New Task")
 							setSecondaryButtonText(undefined)
+							setIsTaskRunning(false)
 							break
 					}
 					break
 				case "say":
-					// don't want to reset since there could be a "say" after an "ask" while ask is waiting for response
 					switch (lastMessage.say) {
 						case "api_req_started":
 							if (messages.at(-2)?.ask === "command_output") {
-								// if the last ask is a command_output, and we receive an api_req_started, then that means the command has finished and we don't need input from the user anymore (in every other case, the user has to interact with input field or buttons to continue, which does the following automatically)
 								setInputValue("")
 								setTextAreaDisabled(true)
 								setSelectedImages([])
 								setClaudeAsk(undefined)
 								setEnableButtons(false)
 							}
+							setIsTaskRunning(true)
 							break
 						case "task":
 						case "error":
@@ -189,19 +206,21 @@ const ChatView = ({
 						case "command_output":
 						case "completion_result":
 						case "tool":
+							setIsTaskRunning(true)
 							break
 					}
 					break
 			}
 		} else {
-			// this would get called after sending the first message, so we have to watch messages.length instead
 			// No messages, so user has to submit a task
-			// setTextAreaDisabled(false)
-			// setClaudeAsk(undefined)
-			// setPrimaryButtonText(undefined)
-			// setSecondaryButtonText(undefined)
+			setTextAreaDisabled(false)
+			setClaudeAsk(undefined)
+			setEnableButtons(false)
+			setPrimaryButtonText(undefined)
+			setSecondaryButtonText(undefined)
+			setIsTaskRunning(false)
 		}
-	}, [messages])
+	}, [messages, requireManualConfirmation])
 
 	useEffect(() => {
 		if (messages.length === 0) {
@@ -210,6 +229,7 @@ const ChatView = ({
 			setEnableButtons(false)
 			setPrimaryButtonText(undefined)
 			setSecondaryButtonText(undefined)
+			setIsTaskRunning(false)
 		}
 	}, [messages.length])
 
@@ -222,9 +242,9 @@ const ChatView = ({
 				switch (claudeAsk) {
 					case "followup":
 					case "tool":
-					case "command": // user can provide feedback to a tool or command use
-					case "command_output": // user can send input to command stdin
-					case "completion_result": // if this happens then the user has feedback for the completion result
+					case "command":
+					case "command_output":
+					case "completion_result":
 					case "resume_task":
 					case "resume_completed_task":
 						vscode.postMessage({
@@ -234,7 +254,6 @@ const ChatView = ({
 							images: selectedImages,
 						})
 						break
-					// there is no other case that a textfield should be enabled
 				}
 			}
 			setInputValue("")
@@ -242,14 +261,10 @@ const ChatView = ({
 			setSelectedImages([])
 			setClaudeAsk(undefined)
 			setEnableButtons(false)
-			// setPrimaryButtonText(undefined)
-			// setSecondaryButtonText(undefined)
+			setIsTaskRunning(true)
 		}
 	}
 
-	/*
-	This logic depends on the useEffect[messages] above to set claudeAsk, after which buttons are shown and we then send an askResponse to the extension.
-	*/
 	const handlePrimaryButtonClick = () => {
 		switch (claudeAsk) {
 			case "request_limit_reached":
@@ -262,15 +277,13 @@ const ChatView = ({
 				break
 			case "completion_result":
 			case "resume_completed_task":
-				// extension waiting for feedback. but we can just present a new task button
 				startNewTask()
 				break
 		}
 		setTextAreaDisabled(true)
 		setClaudeAsk(undefined)
 		setEnableButtons(false)
-		// setPrimaryButtonText(undefined)
-		// setSecondaryButtonText(undefined)
+		setIsTaskRunning(true)
 	}
 
 	const handleSecondaryButtonClick = () => {
@@ -281,15 +294,13 @@ const ChatView = ({
 				break
 			case "command":
 			case "tool":
-				// responds to the API with a "This operation failed" and lets it try again
 				vscode.postMessage({ type: "askResponse", askResponse: "noButtonTapped" })
 				break
 		}
 		setTextAreaDisabled(true)
 		setClaudeAsk(undefined)
 		setEnableButtons(false)
-		// setPrimaryButtonText(undefined)
-		// setSecondaryButtonText(undefined)
+		setIsTaskRunning(false)
 	}
 
 	const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -306,6 +317,7 @@ const ChatView = ({
 
 	const startNewTask = () => {
 		vscode.postMessage({ type: "clearTask" })
+		setIsTaskRunning(false)
 	}
 
 	const selectImages = () => {
@@ -319,7 +331,7 @@ const ChatView = ({
 		}
 
 		const items = e.clipboardData.items
-		const acceptedTypes = ["png", "jpeg", "webp"] // supported by anthropic and openrouter (jpg is just a file extension but the image will be recognized as jpeg)
+		const acceptedTypes = ["png", "jpeg", "webp"]
 		const imageItems = Array.from(items).filter((item) => {
 			const [type, subtype] = item.type.split("/")
 			return type === "image" && acceptedTypes.includes(subtype)
@@ -348,7 +360,6 @@ const ChatView = ({
 			})
 			const imageDataArray = await Promise.all(imagePromises)
 			const dataUrls = imageDataArray.filter((dataUrl): dataUrl is string => dataUrl !== null)
-			//.map((dataUrl) => dataUrl.split(",")[1]) // strip the mime type prefix, sharp doesn't need it
 			if (dataUrls.length > 0) {
 				setSelectedImages((prevImages) => [...prevImages, ...dataUrls].slice(0, MAX_IMAGES_PER_MESSAGE))
 			} else {
@@ -389,7 +400,6 @@ const ChatView = ({
 					}
 					break
 			}
-			// textAreaRef.current is not explicitly required here since react gaurantees that ref will be stable across re-renders, and we're not using its value but its reference.
 		},
 		[isHidden, textAreaDisabled, enableButtons]
 	)
@@ -397,7 +407,6 @@ const ChatView = ({
 	useEvent("message", handleMessage)
 
 	useMount(() => {
-		// NOTE: the vscode window needs to be focused for this to work
 		textAreaRef.current?.focus()
 	})
 
@@ -416,22 +425,20 @@ const ChatView = ({
 		return modifiedMessages.filter((message) => {
 			switch (message.ask) {
 				case "completion_result":
-					// don't show a chat row for a completion_result ask without text. This specific type of message only occurs if Claude wants to execute a command as part of its completion result, in which case we interject the completion_result tool with the execute_command tool.
 					if (message.text === "") {
 						return false
 					}
 					break
-				case "api_req_failed": // this message is used to update the latest api_req_started that the request failed
+				case "api_req_failed":
 				case "resume_task":
 				case "resume_completed_task":
 					return false
 			}
 			switch (message.say) {
-				case "api_req_finished": // combineApiRequests removes this from modifiedMessages anyways
-				case "api_req_retried": // this message is used to update the latest api_req_started that the request was retried
+				case "api_req_finished":
+				case "api_req_retried":
 					return false
 				case "text":
-					// Sometimes Claude returns an empty text message, we don't want to render these. (We also use a say text for user messages, so in case they just sent images we still render that)
 					if ((message.text ?? "") === "" && (message.images?.length ?? 0) === 0) {
 						return false
 					}
@@ -442,10 +449,7 @@ const ChatView = ({
 	}, [modifiedMessages])
 
 	useEffect(() => {
-		// We use a setTimeout to ensure new content is rendered before scrolling to the bottom. virtuoso's followOutput would scroll to the bottom before the new content could render.
 		const timer = setTimeout(() => {
-			// TODO: we can use virtuoso's isAtBottom to prevent scrolling if user is scrolled up, and show a 'scroll to bottom' button for better UX
-			// NOTE: scroll to bottom may not work if you use margin, see virtuoso's troubleshooting
 			virtuosoRef.current?.scrollTo({ top: Number.MAX_SAFE_INTEGER, behavior: "smooth" })
 		}, 50)
 
@@ -532,17 +536,10 @@ const ChatView = ({
 						className="scrollable"
 						style={{
 							flexGrow: 1,
-							overflowY: "scroll", // always show scrollbar
+							overflowY: "scroll",
 						}}
-						// followOutput={(isAtBottom) => {
-						// 	const lastMessage = modifiedMessages.at(-1)
-						// 	if (lastMessage && shouldShowChatRow(lastMessage)) {
-						// 		return "smooth"
-						// 	}
-						// 	return false
-						// }}
-						increaseViewportBy={{ top: 0, bottom: Number.MAX_SAFE_INTEGER }} // hack to make sure the last message is always rendered to get truly perfect scroll to bottom animation when new messages are added (Number.MAX_SAFE_INTEGER is safe for arithmetic operations, which is all virtuoso uses this value for in src/sizeRangeSystem.ts)
-						data={visibleMessages} // messages is the raw format returned by extension, modifiedMessages is the manipulated structure that combines certain messages of related type, and visibleMessages is the filtered structure that removes messages that should not be rendered
+						increaseViewportBy={{ top: 0, bottom: Number.MAX_SAFE_INTEGER }}
+						data={visibleMessages}
 						itemContent={(index, message) => (
 							<ChatRow
 								key={message.ts}
@@ -556,34 +553,36 @@ const ChatView = ({
 							/>
 						)}
 					/>
-					<div
-						style={{
-							opacity: primaryButtonText || secondaryButtonText ? (enableButtons ? 1 : 0.5) : 0,
-							display: "flex",
-							padding: "10px 15px 0px 15px",
-						}}>
-						{primaryButtonText && (
-							<VSCodeButton
-								appearance="primary"
-								disabled={!enableButtons}
-								style={{
-									flex: secondaryButtonText ? 1 : 2,
-									marginRight: secondaryButtonText ? "6px" : "0",
-								}}
-								onClick={handlePrimaryButtonClick}>
-								{primaryButtonText}
-							</VSCodeButton>
-						)}
-						{secondaryButtonText && (
-							<VSCodeButton
-								appearance="secondary"
-								disabled={!enableButtons}
-								style={{ flex: 1, marginLeft: "6px" }}
-								onClick={handleSecondaryButtonClick}>
-								{secondaryButtonText}
-							</VSCodeButton>
-						)}
-					</div>
+					{(requireManualConfirmation || isTaskRunning) && (primaryButtonText || secondaryButtonText) && (
+						<div
+							style={{
+								opacity: enableButtons ? 1 : 0.5,
+								display: "flex",
+								padding: "10px 15px 0px 15px",
+							}}>
+							{primaryButtonText && (
+								<VSCodeButton
+									appearance="primary"
+									disabled={!enableButtons && !isTaskRunning}
+									style={{
+										flex: secondaryButtonText ? 1 : 2,
+										marginRight: secondaryButtonText ? "6px" : "0",
+									}}
+									onClick={isTaskRunning && !enableButtons ? handleTaskCloseButtonClick : handlePrimaryButtonClick}>
+									{isTaskRunning && !enableButtons ? "Stop Task" : primaryButtonText}
+								</VSCodeButton>
+							)}
+							{secondaryButtonText && (
+								<VSCodeButton
+									appearance="secondary"
+									disabled={!enableButtons}
+									style={{ flex: 1, marginLeft: "6px" }}
+									onClick={handleSecondaryButtonClick}>
+									{secondaryButtonText}
+								</VSCodeButton>
+							)}
+						</div>
+					)}
 				</>
 			)}
 
@@ -615,7 +614,6 @@ const ChatView = ({
 					onBlur={() => setIsTextAreaFocused(false)}
 					onPaste={handlePaste}
 					onHeightChange={() =>
-						//virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "auto" })
 						virtuosoRef.current?.scrollTo({ top: Number.MAX_SAFE_INTEGER, behavior: "auto" })
 					}
 					placeholder={placeholderText}
@@ -626,20 +624,16 @@ const ChatView = ({
 						boxSizing: "border-box",
 						backgroundColor: "var(--vscode-input-background)",
 						color: "var(--vscode-input-foreground)",
-						//border: "1px solid var(--vscode-input-border)",
 						borderRadius: 2,
 						fontFamily: "var(--vscode-font-family)",
 						fontSize: "var(--vscode-editor-font-size)",
 						lineHeight: "var(--vscode-editor-line-height)",
 						resize: "none",
 						overflow: "hidden",
-						// Since we have maxRows, when text is long enough it starts to overflow the bottom padding, appearing behind the thumbnails. To fix this, we use a transparent border to push the text up instead. (https://stackoverflow.com/questions/42631947/maintaining-a-padding-inside-of-text-area/52538410#52538410)
 						borderTop: "9px solid transparent",
 						borderBottom: `${thumbnailsHeight + 9}px solid transparent`,
 						borderRight: "54px solid transparent",
 						borderLeft: "9px solid transparent",
-						// Instead of using boxShadow, we use a div with a border to better replicate the behavior when the textarea is focused
-						// boxShadow: "0px 0px 0px 1px var(--vscode-input-border)",
 						padding: 0,
 						cursor: textAreaDisabled ? "not-allowed" : undefined,
 						flex: 1,
@@ -655,7 +649,7 @@ const ChatView = ({
 							paddingTop: 4,
 							bottom: 14,
 							left: 22,
-							right: 67, // (54 + 9) + 4 extra padding
+							right: 67,
 						}}
 					/>
 				)}
@@ -663,10 +657,10 @@ const ChatView = ({
 					style={{
 						position: "absolute",
 						right: 20,
-						bottom: 14.5, // Align with the bottom padding of the container
+						bottom: 14.5,
 						display: "flex",
 						alignItems: "flex-end",
-						height: "calc(100% - 20px)", // Full height minus top and bottom padding
+						height: "calc(100% - 20px)",
 					}}>
 					<VSCodeButton
 						disabled={shouldDisableImages}

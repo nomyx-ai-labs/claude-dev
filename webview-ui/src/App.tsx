@@ -27,6 +27,8 @@ const App: React.FC = () => {
 	const [maxRequestsPerTask, setMaxRequestsPerTask] = useState<string>("")
 	const [customInstructions, setCustomInstructions] = useState<string>("")
 	const [alwaysAllowReadOnly, setAlwaysAllowReadOnly] = useState<boolean>(false)
+	const [requireManualConfirmation, setRequireManualConfirmation] = useState<boolean>(false)
+	const [autoStartTask, setAutoStartTask] = useState<boolean>(false)
 	const [vscodeThemeName, setVscodeThemeName] = useState<string | undefined>(undefined)
 	const [vscodeUriScheme, setVscodeUriScheme] = useState<string | undefined>(undefined)
 	const [claudeMessages, setClaudeMessages] = useState<ClaudeMessage[]>([])
@@ -50,7 +52,8 @@ const App: React.FC = () => {
 						message.state!.apiConfiguration?.apiKey !== undefined ||
 						message.state!.apiConfiguration?.openRouterApiKey !== undefined ||
 						message.state!.apiConfiguration?.awsAccessKey !== undefined ||
-						message.state!.apiConfiguration?.koduApiKey !== undefined
+						message.state!.apiConfiguration?.koduApiKey !== undefined ||
+						message.state!.apiConfiguration?.gcProjectId !== undefined
 					setShowWelcome(!hasKey)
 					if (!hasKey) {
 						setDidAuthKoduFromWelcome(false)
@@ -63,6 +66,8 @@ const App: React.FC = () => {
 					)
 					setCustomInstructions(message.state!.customInstructions || "")
 					setAlwaysAllowReadOnly(message.state!.alwaysAllowReadOnly || false)
+					setRequireManualConfirmation(message.state!.requireManualConfirmation || false)
+					setAutoStartTask(message.state!.autoStartTask || false)
 					setVscodeThemeName(message.state!.themeName)
 					setVscodeUriScheme(message.state!.uriScheme)
 					setClaudeMessages(message.state!.claudeMessages)
@@ -139,6 +144,10 @@ const App: React.FC = () => {
 							setCustomInstructions={setCustomInstructions}
 							alwaysAllowReadOnly={alwaysAllowReadOnly}
 							setAlwaysAllowReadOnly={setAlwaysAllowReadOnly}
+							requireManualConfirmation={requireManualConfirmation}
+							setRequireManualConfirmation={setRequireManualConfirmation}
+							autoStartTask={autoStartTask}
+							setAutoStartTask={setAutoStartTask}
 							onDone={() => setShowSettings(false)}
 							vscodeUriScheme={vscodeUriScheme}
 						/>
@@ -166,6 +175,8 @@ const App: React.FC = () => {
 						vscodeUriScheme={vscodeUriScheme}
 						shouldShowKoduPromo={shouldShowKoduPromo}
 						koduCredits={koduCredits}
+						requireManualConfirmation={requireManualConfirmation}
+						autoStartTask={autoStartTask}
 					/>
 				</>
 			)}

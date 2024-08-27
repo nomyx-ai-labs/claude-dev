@@ -24,6 +24,8 @@ export interface ExtensionState {
 	maxRequestsPerTask?: number
 	customInstructions?: string
 	alwaysAllowReadOnly?: boolean
+	requireManualConfirmation?: boolean
+	autoStartTask?: boolean
 	themeName?: string
 	uriScheme?: string
 	claudeMessages: ClaudeMessage[]

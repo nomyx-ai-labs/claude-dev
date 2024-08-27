@@ -20,6 +20,8 @@ export interface WebviewMessage {
 		| "fetchKoduCredits"
 		| "didDismissKoduPromo"
 		| "resetState"
+		| "requireManualConfirmation"
+		| "autoStartTask"
 	text?: string
 	askResponse?: ClaudeAskResponse
 	apiConfiguration?: ApiConfiguration

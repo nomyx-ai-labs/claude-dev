@@ -25,6 +25,10 @@ type SettingsViewProps = {
 	onDone: () => void
 	alwaysAllowReadOnly: boolean
 	setAlwaysAllowReadOnly: React.Dispatch<React.SetStateAction<boolean>>
+	requireManualConfirmation: boolean
+	setRequireManualConfirmation: React.Dispatch<React.SetStateAction<boolean>>
+	autoStartTask: boolean
+	setAutoStartTask: React.Dispatch<React.SetStateAction<boolean>>
 	vscodeUriScheme?: string
 }
 
@@ -40,6 +44,10 @@ const SettingsView = ({
 	onDone,
 	alwaysAllowReadOnly,
 	setAlwaysAllowReadOnly,
+	requireManualConfirmation,
+	setRequireManualConfirmation,
+	autoStartTask,
+	setAutoStartTask,
 	vscodeUriScheme,
 }: SettingsViewProps) => {
 	const [apiErrorMessage, setApiErrorMessage] = useState<string | undefined>(undefined)
@@ -57,6 +65,8 @@ const SettingsView = ({
 			vscode.postMessage({ type: "maxRequestsPerTask", text: maxRequestsPerTask })
 			vscode.postMessage({ type: "customInstructions", text: customInstructions })
 			vscode.postMessage({ type: "alwaysAllowReadOnly", bool: alwaysAllowReadOnly })
+			vscode.postMessage({ type: "requireManualConfirmation", bool: requireManualConfirmation })
+			vscode.postMessage({ type: "autoStartTask", bool: autoStartTask })
 			onDone()
 		}
 	}
@@ -68,18 +78,6 @@ const SettingsView = ({
 	useEffect(() => {
 		setMaxRequestsErrorMessage(undefined)
 	}, [maxRequestsPerTask])
-
-	// validate as soon as the component is mounted
-	/*
-	useEffect will use stale values of variables if they are not included in the dependency array. so trying to use useEffect with a dependency array of only one value for example will use any other variables' old values. In most cases you don't want this, and should opt to use react-use hooks.
-	
-	useEffect(() => {
-		// uses someVar and anotherVar
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [someVar])
-
-	If we only want to run code once on mount we can use react-use's useEffectOnce or useMount
-	*/
 
 	const handleResetState = () => {
 		vscode.postMessage({ type: "resetState" })
@@ -136,6 +134,38 @@ const SettingsView = ({
 						}}>
 						When enabled, Claude will automatically read files and view directories without requiring you to
 						click the Allow button.
+					</p>
+				</div>
+
+				<div style={{ marginBottom: 5 }}>
+					<VSCodeCheckbox
+						checked={requireManualConfirmation}
+						onChange={(e: any) => setRequireManualConfirmation(e.target.checked)}>
+						<span style={{ fontWeight: "500" }}>Require manual confirmation</span>
+					</VSCodeCheckbox>
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: "5px",
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						When enabled, Claude will require manual confirmation for each task execution.
+					</p>
+				</div>
+
+				<div style={{ marginBottom: 5 }}>
+					<VSCodeCheckbox
+						checked={autoStartTask}
+						onChange={(e: any) => setAutoStartTask(e.target.checked)}>
+						<span style={{ fontWeight: "500" }}>Auto-start task</span>
+					</VSCodeCheckbox>
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: "5px",
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						When enabled, Claude will automatically start a new task when the maximum number of requests is reached.
 					</p>
 				</div>
 

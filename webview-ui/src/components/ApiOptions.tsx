@@ -13,6 +13,8 @@ import {
 	koduModels,
 	openRouterDefaultModelId,
 	openRouterModels,
+	vertexDefaultModelId,
+	vertexModels,
 } from "../../../src/shared/api"
 import { ExtensionMessage } from "../../../src/shared/ExtensionMessage"
 import { getKoduAddCreditsUrl, getKoduHomepageUrl, getKoduSignInUrl } from "../../../src/shared/kodu"
@@ -111,6 +113,7 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({
 					<VSCodeOption value="anthropic">Anthropic</VSCodeOption>
 					<VSCodeOption value="bedrock">AWS Bedrock</VSCodeOption>
 					<VSCodeOption value="openrouter">OpenRouter</VSCodeOption>
+					<VSCodeOption value="vertex">GC Vertex AI</VSCodeOption>
 				</VSCodeDropdown>
 			</div>
 
@@ -280,6 +283,58 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({
 					</p>
 				</div>
 			)}
+			{selectedProvider === "vertex" && (
+				<div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+					<VSCodeTextField
+						value={apiConfiguration?.gcProjectId || ""}
+						style={{ width: "100%" }}
+						onInput={handleInputChange("gcProjectId")}
+						placeholder="Enter Project ID...">
+						<span style={{ fontWeight: 500 }}>Project ID</span>
+					</VSCodeTextField>
+					<VSCodeTextField
+						value={apiConfiguration?.gcRegion || ""}
+						style={{ width: "100%" }}
+						onInput={handleInputChange("gcRegion")}
+						placeholder="Enter Region...">
+						<span style={{ fontWeight: 500 }}>Region</span>
+					</VSCodeTextField>
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: "5px",
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						You must input valid region for the model you want to use.
+						<VSCodeLink
+							href="https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude#regions"
+							style={{ display: "inline" }}>
+							You can find the region here.
+						</VSCodeLink>
+					</p>
+					<VSCodeTextField
+						value={apiConfiguration?.gcServiceAccountKey || ""}
+						style={{ width: "100%" }}
+						onInput={handleInputChange("gcServiceAccountKey")}
+						placeholder="Enter Service Account Key...">
+						<span style={{ fontWeight: 500 }}>Service Account Key (base64 encoded)</span>
+					</VSCodeTextField>
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: "5px",
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						For security reasons, it is recommended to use Application Default Credentials (ADC) instead of
+						Service Account Keys. If you want to use ADC, leave empty.
+						<VSCodeLink
+							href="https://cloud.google.com/docs/authentication/provide-credentials-adc"
+							style={{ display: "inline" }}>
+							For more information about ADC, click here.
+						</VSCodeLink>
+					</p>
+				</div>
+			)}
 
 			{apiErrorMessage && (
 				<p
@@ -302,6 +357,7 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({
 						{selectedProvider === "openrouter" && createDropdown(openRouterModels)}
 						{selectedProvider === "bedrock" && createDropdown(bedrockModels)}
 						{selectedProvider === "kodu" && createDropdown(koduModels)}
+						{selectedProvider === "vertex" && createDropdown(vertexModels)}
 					</div>
 
 					<ModelInfoView modelInfo={selectedModelInfo} />
@@ -407,6 +463,8 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 			return getProviderData(bedrockModels, bedrockDefaultModelId)
 		case "kodu":
 			return getProviderData(koduModels, koduDefaultModelId)
+		case "vertex":
+			return getProviderData(vertexModels, vertexDefaultModelId)
 		default:
 			return getProviderData(anthropicModels, anthropicDefaultModelId)
 	}

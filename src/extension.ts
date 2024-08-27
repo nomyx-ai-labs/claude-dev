@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode"
 import { ClaudeDevProvider } from "./providers/ClaudeDevProvider"
+import { resolveWebviewView } from "./providers/ClaudeDevProvider/resolveWebviewView"
 
 /*
 Built using https://github.com/microsoft/vscode-webview-ui-toolkit
@@ -68,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
 		})
 		// TODO: use better svg icon with light and dark variants (see https://stackoverflow.com/questions/58365687/vscode-extension-iconpath)
 		panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "icon.png")
-		tabProvider.resolveWebviewView(panel)
+		resolveWebviewView(tabProvider, panel)
 
 		// Lock the editor group so clicking on files doesn't open them over the panel
 		new Promise((resolve) => setTimeout(resolve, 100)).then(() => {
