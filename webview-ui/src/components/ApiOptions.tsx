@@ -12,6 +12,8 @@ import {
 	openRouterModels,
 	vertexDefaultModelId,
 	vertexModels,
+	azureDefaultModelId,
+	azureModels,
 } from "../../../src/shared/api"
 import { useExtensionState } from "../context/ExtensionStateContext"
 
@@ -30,14 +32,6 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({ showModelOptions, apiErrorMessa
 		return normalizeApiConfiguration(apiConfiguration)
 	}, [apiConfiguration])
 
-	/*
-	VSCodeDropdown has an open bug where dynamically rendered options don't auto select the provided value prop. You can see this for yourself by comparing  it with normal select/option elements, which work as expected.
-	https://github.com/microsoft/vscode-webview-ui-toolkit/issues/433
-
-	In our case, when the user switches between providers, we recalculate the selectedModelId depending on the provider, the default model for that provider, and a modelId that the user may have selected. Unfortunately, the VSCodeDropdown component wouldn't select this calculated value, and would default to the first "Select a model..." option instead, which makes it seem like the model was cleared out when it wasn't. 
-
-	As a workaround, we create separate instances of the dropdown for each provider, and then conditionally render the one that matches the current provider.
-	*/
 	const createDropdown = (models: Record<string, ModelInfo>) => {
 		return (
 			<VSCodeDropdown
@@ -73,6 +67,7 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({ showModelOptions, apiErrorMessa
 					<VSCodeOption value="bedrock">AWS Bedrock</VSCodeOption>
 					<VSCodeOption value="openrouter">OpenRouter</VSCodeOption>
 					<VSCodeOption value="vertex">GCP Vertex AI</VSCodeOption>
+					<VSCodeOption value="azure">Azure OpenAI</VSCodeOption>
 				</VSCodeDropdown>
 			</div>
 
@@ -156,17 +151,10 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({ showModelOptions, apiErrorMessa
 							style={{ width: "100%" }}
 							onChange={handleInputChange("awsRegion")}>
 							<VSCodeOption value="">Select a region...</VSCodeOption>
-							{/* The user will have to choose a region that supports the model they use, but this shouldn't be a problem since they'd have to request access for it in that region in the first place. */}
 							<VSCodeOption value="us-east-1">us-east-1</VSCodeOption>
-							{/* <VSCodeOption value="us-east-2">us-east-2</VSCodeOption> */}
-							{/* <VSCodeOption value="us-west-1">us-west-1</VSCodeOption> */}
 							<VSCodeOption value="us-west-2">us-west-2</VSCodeOption>
-							{/* <VSCodeOption value="af-south-1">af-south-1</VSCodeOption> */}
-							{/* <VSCodeOption value="ap-east-1">ap-east-1</VSCodeOption> */}
 							<VSCodeOption value="ap-south-1">ap-south-1</VSCodeOption>
 							<VSCodeOption value="ap-northeast-1">ap-northeast-1</VSCodeOption>
-							{/* <VSCodeOption value="ap-northeast-2">ap-northeast-2</VSCodeOption> */}
-							{/* <VSCodeOption value="ap-northeast-3">ap-northeast-3</VSCodeOption> */}
 							<VSCodeOption value="ap-southeast-1">ap-southeast-1</VSCodeOption>
 							<VSCodeOption value="ap-southeast-2">ap-southeast-2</VSCodeOption>
 							<VSCodeOption value="ca-central-1">ca-central-1</VSCodeOption>
@@ -174,8 +162,6 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({ showModelOptions, apiErrorMessa
 							<VSCodeOption value="eu-west-1">eu-west-1</VSCodeOption>
 							<VSCodeOption value="eu-west-2">eu-west-2</VSCodeOption>
 							<VSCodeOption value="eu-west-3">eu-west-3</VSCodeOption>
-							{/* <VSCodeOption value="eu-north-1">eu-north-1</VSCodeOption> */}
-							{/* <VSCodeOption value="me-south-1">me-south-1</VSCodeOption> */}
 							<VSCodeOption value="sa-east-1">sa-east-1</VSCodeOption>
 						</VSCodeDropdown>
 					</div>
@@ -244,6 +230,39 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({ showModelOptions, apiErrorMessa
 				</div>
 			)}
 
+			{apiConfiguration?.apiProvider === "azure" && (
+				<div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+					<VSCodeTextField
+						value={apiConfiguration?.azureApiKey || ""}
+						style={{ width: "100%" }}
+						type="password"
+						onInput={handleInputChange("azureApiKey")}
+						placeholder="Enter API Key...">
+						<span style={{ fontWeight: 500 }}>Azure OpenAI API Key</span>
+					</VSCodeTextField>
+					<VSCodeTextField
+						value={apiConfiguration?.azureEndpoint || ""}
+						style={{ width: "100%" }}
+						onInput={handleInputChange("azureEndpoint")}
+						placeholder="Enter Azure OpenAI Endpoint...">
+						<span style={{ fontWeight: 500 }}>Azure OpenAI Endpoint</span>
+					</VSCodeTextField>
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: "5px",
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						These credentials are stored locally and only used to make API requests from this extension.
+						<VSCodeLink
+							href="https://azure.microsoft.com/en-us/products/cognitive-services/openai-service/"
+							style={{ display: "inline" }}>
+							You can get Azure OpenAI credentials by signing up here.
+						</VSCodeLink>
+					</p>
+				</div>
+			)}
+
 			{apiErrorMessage && (
 				<p
 					style={{
@@ -265,6 +284,7 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({ showModelOptions, apiErrorMessa
 						{selectedProvider === "openrouter" && createDropdown(openRouterModels)}
 						{selectedProvider === "bedrock" && createDropdown(bedrockModels)}
 						{selectedProvider === "vertex" && createDropdown(vertexModels)}
+						{selectedProvider === "azure" && createDropdown(azureModels)}
 					</div>
 
 					<ModelInfoView modelInfo={selectedModelInfo} />
@@ -370,6 +390,8 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 			return getProviderData(bedrockModels, bedrockDefaultModelId)
 		case "vertex":
 			return getProviderData(vertexModels, vertexDefaultModelId)
+		case "azure":
+			return getProviderData(azureModels, azureDefaultModelId)
 		default:
 			return getProviderData(anthropicModels, anthropicDefaultModelId)
 	}

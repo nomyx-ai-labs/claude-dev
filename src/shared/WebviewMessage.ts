@@ -17,6 +17,7 @@ export interface WebviewMessage {
 		| "deleteTaskWithId"
 		| "exportTaskWithId"
 		| "resetState"
+		| "automaticallyRunTasks"
 	text?: string
 	askResponse?: ClaudeAskResponse
 	apiConfiguration?: ApiConfiguration

@@ -1,4 +1,4 @@
-export type ApiProvider = "anthropic" | "openrouter" | "bedrock" | "vertex"
+export type ApiProvider = "anthropic" | "openrouter" | "bedrock" | "vertex" | "azure"
 
 export interface ApiHandlerOptions {
 	apiModelId?: ApiModelId
@@ -9,6 +9,10 @@ export interface ApiHandlerOptions {
 	awsRegion?: string
 	vertexProjectId?: string
 	vertexRegion?: string
+	azureApiKey?: string
+	azureEndpoint?: string
+	azureDeploymentId?: string
+	azureRegion?: string
 }
 
 export type ApiConfiguration = ApiHandlerOptions & {
@@ -28,7 +32,7 @@ export interface ModelInfo {
 	cacheReadsPrice?: number
 }
 
-export type ApiModelId = AnthropicModelId | OpenRouterModelId | BedrockModelId | VertexModelId
+export type ApiModelId = AnthropicModelId | OpenRouterModelId | BedrockModelId | VertexModelId | AzureModelId
 
 // Anthropic
 // https://docs.anthropic.com/en/docs/about-claude/models
@@ -289,5 +293,29 @@ export const vertexModels = {
 		supportsPromptCache: false,
 		inputPrice: 0.25,
 		outputPrice: 1.25,
+	},
+} as const satisfies Record<string, ModelInfo>
+
+
+// Azure
+// https://azure.microsoft.com/en-us/services/cognitive-services/text-analytics/
+export type AzureModelId = keyof typeof azureModels
+export const azureDefaultModelId: AzureModelId = "azure-gpt-4o-2024-08-06"
+export const azureModels = {
+	"azure-gpt-4o-2024-08-06": {
+		maxTokens: 16384,
+		contextWindow: 128_000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		inputPrice: 2.5,
+		outputPrice: 10,
+	},
+	"azure-gpt-4-turbo": {
+		maxTokens: 4096,
+		contextWindow: 128_000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		inputPrice: 10,
+		outputPrice: 30,
 	},
 } as const satisfies Record<string, ModelInfo>

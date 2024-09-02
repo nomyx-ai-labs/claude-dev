@@ -9,12 +9,6 @@ import * as path from "path"
 import fs from "fs/promises"
 import { HistoryItem } from "../shared/HistoryItem"
 
-/*
-https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
-
-https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
-*/
-
 type SecretKey = "apiKey" | "openRouterApiKey" | "awsAccessKey" | "awsSecretKey"
 type GlobalStateKey =
 	| "apiProvider"
@@ -27,14 +21,15 @@ type GlobalStateKey =
 	| "customInstructions"
 	| "alwaysAllowReadOnly"
 	| "taskHistory"
+	| "automaticallyRunTasks"
 
 export class ClaudeDevProvider implements vscode.WebviewViewProvider {
-	public static readonly sideBarId = "claude-dev.SidebarProvider" // used in package.json as the view's id. This value cannot be changed due to how vscode caches views based on their id, and updating the id would break existing instances of the extension.
+	public static readonly sideBarId = "claude-dev.SidebarProvider"
 	public static readonly tabPanelId = "claude-dev.TabPanelProvider"
 	private disposables: vscode.Disposable[] = []
 	private view?: vscode.WebviewView | vscode.WebviewPanel
 	private claudeDev?: ClaudeDev
-	private latestAnnouncementId = "aug-31-2024-1" // update to some unique identifier when we add a new announcement
+	private latestAnnouncementId = "aug-31-2024-1"
 
 	constructor(readonly context: vscode.ExtensionContext, private readonly outputChannel: vscode.OutputChannel) {
 		this.outputChannel.appendLine("ClaudeDevProvider instantiated")
@@ -164,15 +159,17 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 		this.outputChannel.appendLine("Webview view resolved")
 	}
 
+
 	async initClaudeDevWithTask(task?: string, images?: string[]) {
 		await this.clearTask() // ensures that an exising task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
-		const { maxRequestsPerTask, apiConfiguration, customInstructions, alwaysAllowReadOnly } = await this.getState()
+		const { maxRequestsPerTask, apiConfiguration, customInstructions, alwaysAllowReadOnly, automaticallyRunTasks } = await this.getState()
 		this.claudeDev = new ClaudeDev(
 			this,
 			apiConfiguration,
 			maxRequestsPerTask,
 			customInstructions,
 			alwaysAllowReadOnly,
+			automaticallyRunTasks,
 			task,
 			images
 		)
@@ -180,111 +177,113 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 
 	async initClaudeDevWithHistoryItem(historyItem: HistoryItem) {
 		await this.clearTask()
-		const { maxRequestsPerTask, apiConfiguration, customInstructions, alwaysAllowReadOnly } = await this.getState()
+		const { maxRequestsPerTask, apiConfiguration, customInstructions, alwaysAllowReadOnly, automaticallyRunTasks } = await this.getState()
 		this.claudeDev = new ClaudeDev(
 			this,
 			apiConfiguration,
 			maxRequestsPerTask,
 			customInstructions,
 			alwaysAllowReadOnly,
+			automaticallyRunTasks,
 			undefined,
 			undefined,
 			historyItem
 		)
 	}
 
-	// Send any JSON serializable data to the react app
-	async postMessageToWebview(message: ExtensionMessage) {
-		await this.view?.webview.postMessage(message)
-	}
+// Send any JSON serializable data to the react app
+async postMessageToWebview(message: ExtensionMessage) {
+	await this.view?.webview.postMessage(message)
+}
 
-	/**
-	 * Defines and returns the HTML that should be rendered within the webview panel.
-	 *
-	 * @remarks This is also the place where references to the React webview build files
-	 * are created and inserted into the webview HTML.
-	 *
-	 * @param webview A reference to the extension webview
-	 * @param extensionUri The URI of the directory containing the extension
-	 * @returns A template string literal containing the HTML that should be
-	 * rendered within the webview panel
-	 */
-	private getHtmlContent(webview: vscode.Webview): string {
-		// Get the local path to main script run in the webview,
-		// then convert it to a uri we can use in the webview.
+/**
+ * Defines and returns the HTML that should be rendered within the webview panel.
+ *
+ * @remarks This is also the place where references to the React webview build files
+ * are created and inserted into the webview HTML.
+ *
+ * @param webview A reference to the extension webview
+ * @param extensionUri The URI of the directory containing the extension
+ * @returns A template string literal containing the HTML that should be
+ * rendered within the webview panel
+ */
+private getHtmlContent(webview: vscode.Webview): string {
+	// Get the local path to main script run in the webview,
+	// then convert it to a uri we can use in the webview.
 
-		// The CSS file from the React build output
-		const stylesUri = getUri(webview, this.context.extensionUri, [
-			"webview-ui",
-			"build",
-			"static",
-			"css",
-			"main.css",
-		])
-		// The JS file from the React build output
-		const scriptUri = getUri(webview, this.context.extensionUri, ["webview-ui", "build", "static", "js", "main.js"])
+	// The CSS file from the React build output
+	const stylesUri = getUri(webview, this.context.extensionUri, [
+		"webview-ui",
+		"build",
+		"static",
+		"css",
+		"main.css",
+	])
+	// The JS file from the React build output
+	const scriptUri = getUri(webview, this.context.extensionUri, ["webview-ui", "build", "static", "js", "main.js"])
 
-		// The codicon font from the React build output
-		// https://github.com/microsoft/vscode-extension-samples/blob/main/webview-codicons-sample/src/extension.ts
-		// we installed this package in the extension so that we can access it how its intended from the extension (the font file is likely bundled in vscode), and we just import the css fileinto our react app we don't have access to it
-		// don't forget to add font-src ${webview.cspSource};
-		const codiconsUri = getUri(webview, this.context.extensionUri, [
-			"node_modules",
-			"@vscode",
-			"codicons",
-			"dist",
-			"codicon.css",
-		])
+	// The codicon font from the React build output
+	// https://github.com/microsoft/vscode-extension-samples/blob/main/webview-codicons-sample/src/extension.ts
+	// we installed this package in the extension so that we can access it how its intended from the extension (the font file is likely bundled in vscode), and we just import the css fileinto our react app we don't have access to it
+	// don't forget to add font-src ${webview.cspSource};
+	const codiconsUri = getUri(webview, this.context.extensionUri, [
+		"node_modules",
+		"@vscode",
+		"codicons",
+		"dist",
+		"codicon.css",
+	])
 
-		// const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "assets", "main.js"))
+	// const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "assets", "main.js"))
 
-		// const styleResetUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "assets", "reset.css"))
-		// const styleVSCodeUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "assets", "vscode.css"))
+	// const styleResetUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "assets", "reset.css"))
+	// const styleVSCodeUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "assets", "vscode.css"))
 
-		// // Same for stylesheet
-		// const stylesheetUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "assets", "main.css"))
+	// // Same for stylesheet
+	// const stylesheetUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "assets", "main.css"))
 
-		// Use a nonce to only allow a specific script to be run.
-		/*
-        content security policy of your webview to only allow scripts that have a specific nonce
-        create a content security policy meta tag so that only loading scripts with a nonce is allowed
-        As your extension grows you will likely want to add custom styles, fonts, and/or images to your webview. If you do, you will need to update the content security policy meta tag to explicity allow for these resources. E.g.
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; img-src ${webview.cspSource} https:; script-src 'nonce-${nonce}';">
-		- 'unsafe-inline' is required for styles due to vscode-webview-toolkit's dynamic style injection
-		- since we pass base64 images to the webview, we need to specify img-src ${webview.cspSource} data:;
+	// Use a nonce to only allow a specific script to be run.
+	/*
+	content security policy of your webview to only allow scripts that have a specific nonce
+	create a content security policy meta tag so that only loading scripts with a nonce is allowed
+	As your extension grows you will likely want to add custom styles, fonts, and/or images to your webview. If you do, you will need to update the content security policy meta tag to explicity allow for these resources. E.g.
+			<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; img-src ${webview.cspSource} https:; script-src 'nonce-${nonce}';">
+	- 'unsafe-inline' is required for styles due to vscode-webview-toolkit's dynamic style injection
+	- since we pass base64 images to the webview, we need to specify img-src ${webview.cspSource} data:;
 
-        in meta tag we add nonce attribute: A cryptographic nonce (only used once) to allow scripts. The server must generate a unique nonce value each time it transmits a policy. It is critical to provide a nonce that cannot be guessed as bypassing a resource's policy is otherwise trivial.
-        */
-		const nonce = getNonce()
+	in meta tag we add nonce attribute: A cryptographic nonce (only used once) to allow scripts. The server must generate a unique nonce value each time it transmits a policy. It is critical to provide a nonce that cannot be guessed as bypassing a resource's policy is otherwise trivial.
+	*/
+	const nonce = getNonce()
 
-		// Tip: Install the es6-string-html VS Code extension to enable code highlighting below
-		return /*html*/ `
-        <!DOCTYPE html>
-        <html lang="en">
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
-            <meta name="theme-color" content="#000000">
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data:; script-src 'nonce-${nonce}';">
-            <link rel="stylesheet" type="text/css" href="${stylesUri}">
-			<link href="${codiconsUri}" rel="stylesheet" />
-            <title>Claude Dev</title>
-          </head>
-          <body>
-            <noscript>You need to enable JavaScript to run this app.</noscript>
-            <div id="root"></div>
-            <script nonce="${nonce}" src="${scriptUri}"></script>
-          </body>
-        </html>
-      `
-	}
+	// Tip: Install the es6-string-html VS Code extension to enable code highlighting below
+	return /*html*/ `
+	<!DOCTYPE html>
+	<html lang="en">
+	  <head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
+		<meta name="theme-color" content="#000000">
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data:; script-src 'nonce-${nonce}';">
+		<link rel="stylesheet" type="text/css" href="${stylesUri}">
+		<link href="${codiconsUri}" rel="stylesheet" />
+		<title>Claude Dev</title>
+	  </head>
+	  <body>
+		<noscript>You need to enable JavaScript to run this app.</noscript>
+		<div id="root"></div>
+		<script nonce="${nonce}" src="${scriptUri}"></script>
+	  </body>
+	</html>
+  `
+}
 
-	/**
-	 * Sets up an event listener to listen for messages passed from the webview context and
-	 * executes code based on the message that is recieved.
-	 *
-	 * @param webview A reference to the extension webview
-	 */
+/**
+ * Sets up an event listener to listen for messages passed from the webview context and
+ * executes code based on the message that is recieved.
+ *
+ * @param webview A reference to the extension webview
+ */
+
 	private setWebviewMessageListener(webview: vscode.Webview) {
 		webview.onDidReceiveMessage(
 			async (message: WebviewMessage) => {
@@ -386,8 +385,11 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 					case "resetState":
 						await this.resetState()
 						break
-					// Add more switch case statements here as more webview message commands
-					// are created within the webview context (i.e. inside media/main.js)
+					case "automaticallyRunTasks":
+						await this.updateGlobalState("automaticallyRunTasks", message.bool ?? false)
+						this.claudeDev?.updateAutomaticallyRunTasks(message.bool ?? false)
+						await this.postStateToWebview()
+						break
 				}
 			},
 			null,
@@ -395,205 +397,182 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 		)
 	}
 
-	// Task history
+// Task history
 
-	async getTaskWithId(id: string): Promise<{
-		historyItem: HistoryItem
-		taskDirPath: string
-		apiConversationHistoryFilePath: string
-		claudeMessagesFilePath: string
-		apiConversationHistory: Anthropic.MessageParam[]
-	}> {
-		const history = ((await this.getGlobalState("taskHistory")) as HistoryItem[] | undefined) || []
-		const historyItem = history.find((item) => item.id === id)
-		if (historyItem) {
-			const taskDirPath = path.join(this.context.globalStorageUri.fsPath, "tasks", id)
-			const apiConversationHistoryFilePath = path.join(taskDirPath, "api_conversation_history.json")
-			const claudeMessagesFilePath = path.join(taskDirPath, "claude_messages.json")
-			const fileExists = await fs
-				.access(apiConversationHistoryFilePath)
-				.then(() => true)
-				.catch(() => false)
-			if (fileExists) {
-				const apiConversationHistory = JSON.parse(await fs.readFile(apiConversationHistoryFilePath, "utf8"))
-				return {
-					historyItem,
-					taskDirPath,
-					apiConversationHistoryFilePath,
-					claudeMessagesFilePath,
-					apiConversationHistory,
-				}
-			}
-		}
-		// if we tried to get a task that doesn't exist, remove it from state
-		await this.deleteTaskFromState(id)
-		throw new Error("Task not found")
-	}
-
-	async showTaskWithId(id: string) {
-		if (id !== this.claudeDev?.taskId) {
-			// non-current task
-			const { historyItem } = await this.getTaskWithId(id)
-			await this.initClaudeDevWithHistoryItem(historyItem) // clears existing task
-		}
-		await this.postMessageToWebview({ type: "action", action: "chatButtonTapped" })
-	}
-
-	async exportTaskWithId(id: string) {
-		const { historyItem, apiConversationHistory } = await this.getTaskWithId(id)
-		await downloadTask(historyItem.ts, apiConversationHistory)
-	}
-
-	async deleteTaskWithId(id: string) {
-		if (id === this.claudeDev?.taskId) {
-			await this.clearTask()
-		}
-
-		const { taskDirPath, apiConversationHistoryFilePath, claudeMessagesFilePath } = await this.getTaskWithId(id)
-
-		// Delete the task files
-		const apiConversationHistoryFileExists = await fs
+async getTaskWithId(id: string): Promise<{
+	historyItem: HistoryItem
+	taskDirPath: string
+	apiConversationHistoryFilePath: string
+	claudeMessagesFilePath: string
+	apiConversationHistory: Anthropic.MessageParam[]
+}> {
+	const history = ((await this.getGlobalState("taskHistory")) as HistoryItem[] | undefined) || []
+	const historyItem = history.find((item) => item.id === id)
+	if (historyItem) {
+		const taskDirPath = path.join(this.context.globalStorageUri.fsPath, "tasks", id)
+		const apiConversationHistoryFilePath = path.join(taskDirPath, "api_conversation_history.json")
+		const claudeMessagesFilePath = path.join(taskDirPath, "claude_messages.json")
+		const fileExists = await fs
 			.access(apiConversationHistoryFilePath)
 			.then(() => true)
 			.catch(() => false)
-		if (apiConversationHistoryFileExists) {
-			await fs.unlink(apiConversationHistoryFilePath)
-		}
-		const claudeMessagesFileExists = await fs
-			.access(claudeMessagesFilePath)
-			.then(() => true)
-			.catch(() => false)
-		if (claudeMessagesFileExists) {
-			await fs.unlink(claudeMessagesFilePath)
-		}
-		await fs.rmdir(taskDirPath) // succeeds if the dir is empty
-
-		await this.deleteTaskFromState(id)
-	}
-
-	async deleteTaskFromState(id: string) {
-		// Remove the task from history
-		const taskHistory = ((await this.getGlobalState("taskHistory")) as HistoryItem[] | undefined) || []
-		const updatedTaskHistory = taskHistory.filter((task) => task.id !== id)
-		await this.updateGlobalState("taskHistory", updatedTaskHistory)
-
-		// Notify the webview that the task has been deleted
-		await this.postStateToWebview()
-	}
-
-	async postStateToWebview() {
-		const state = await this.getStateToPostToWebview()
-		this.postMessageToWebview({ type: "state", state })
-	}
-
-	async getStateToPostToWebview() {
-		const {
-			apiConfiguration,
-			maxRequestsPerTask,
-			lastShownAnnouncementId,
-			customInstructions,
-			alwaysAllowReadOnly,
-			taskHistory,
-		} = await this.getState()
-		return {
-			version: this.context.extension?.packageJSON?.version ?? "",
-			apiConfiguration,
-			maxRequestsPerTask,
-			customInstructions,
-			alwaysAllowReadOnly,
-			themeName: vscode.workspace.getConfiguration("workbench").get<string>("colorTheme"),
-			uriScheme: vscode.env.uriScheme,
-			claudeMessages: this.claudeDev?.claudeMessages || [],
-			taskHistory: (taskHistory || []).filter((item) => item.ts && item.task).sort((a, b) => b.ts - a.ts),
-			shouldShowAnnouncement: lastShownAnnouncementId !== this.latestAnnouncementId,
+		if (fileExists) {
+			const apiConversationHistory = JSON.parse(await fs.readFile(apiConversationHistoryFilePath, "utf8"))
+			return {
+				historyItem,
+				taskDirPath,
+				apiConversationHistoryFilePath,
+				claudeMessagesFilePath,
+				apiConversationHistory,
+			}
 		}
 	}
+	// if we tried to get a task that doesn't exist, remove it from state
+	await this.deleteTaskFromState(id)
+	throw new Error("Task not found")
+}
 
-	async clearTask() {
-		this.claudeDev?.abortTask()
-		this.claudeDev = undefined // removes reference to it, so once promises end it will be garbage collected
+async showTaskWithId(id: string) {
+	if (id !== this.claudeDev?.taskId) {
+		// non-current task
+		const { historyItem } = await this.getTaskWithId(id)
+		await this.initClaudeDevWithHistoryItem(historyItem) // clears existing task
+	}
+	await this.postMessageToWebview({ type: "action", action: "chatButtonTapped" })
+}
+
+async exportTaskWithId(id: string) {
+	const { historyItem, apiConversationHistory } = await this.getTaskWithId(id)
+	await downloadTask(historyItem.ts, apiConversationHistory)
+}
+
+async deleteTaskWithId(id: string) {
+	if (id === this.claudeDev?.taskId) {
+		await this.clearTask()
 	}
 
-	// Caching mechanism to keep track of webview messages + API conversation history per provider instance
+	const { taskDirPath, apiConversationHistoryFilePath, claudeMessagesFilePath } = await this.getTaskWithId(id)
 
-	/*
-	Now that we use retainContextWhenHidden, we don't have to store a cache of claude messages in the user's state, but we could to reduce memory footprint in long conversations.
+	// Delete the task files
+	const apiConversationHistoryFileExists = await fs
+		.access(apiConversationHistoryFilePath)
+		.then(() => true)
+		.catch(() => false)
+	if (apiConversationHistoryFileExists) {
+		await fs.unlink(apiConversationHistoryFilePath)
+	}
+	const claudeMessagesFileExists = await fs
+		.access(claudeMessagesFilePath)
+		.then(() => true)
+		.catch(() => false)
+	if (claudeMessagesFileExists) {
+		await fs.unlink(claudeMessagesFilePath)
+	}
+	await fs.rmdir(taskDirPath) // succeeds if the dir is empty
 
-	- We have to be careful of what state is shared between ClaudeDevProvider instances since there could be multiple instances of the extension running at once. For example when we cached claude messages using the same key, two instances of the extension could end up using the same key and overwriting each other's messages.
-	- Some state does need to be shared between the instances, i.e. the API key--however there doesn't seem to be a good way to notfy the other instances that the API key has changed.
+	await this.deleteTaskFromState(id)
+}
 
-	We need to use a unique identifier for each ClaudeDevProvider instance's message cache since we could be running several instances of the extension outside of just the sidebar i.e. in editor panels.
+async deleteTaskFromState(id: string) {
+	// Remove the task from history
+	const taskHistory = ((await this.getGlobalState("taskHistory")) as HistoryItem[] | undefined) || []
+	const updatedTaskHistory = taskHistory.filter((task) => task.id !== id)
+	await this.updateGlobalState("taskHistory", updatedTaskHistory)
 
-	For now since we don't need to store task history, we'll just use an identifier unique to this provider instance (since there can be several provider instances open at once).
-	However in the future when we implement task history, we'll need to use a unique identifier for each task. As well as manage a data structure that keeps track of task history with their associated identifiers and the task message itself, to present in a 'Task History' view.
-	Task history is a significant undertaking as it would require refactoring how we wait for ask responses--it would need to be a hidden claudeMessage, so that user's can resume tasks that ended with an ask.
-	*/
-	// private providerInstanceIdentifier = Date.now()
-	// getClaudeMessagesStateKey() {
-	// 	return `claudeMessages-${this.providerInstanceIdentifier}`
-	// }
+	// Notify the webview that the task has been deleted
+	await this.postStateToWebview()
+}
 
-	// getApiConversationHistoryStateKey() {
-	// 	return `apiConversationHistory-${this.providerInstanceIdentifier}`
-	// }
+async postStateToWebview() {
+	const state = await this.getStateToPostToWebview()
+	this.postMessageToWebview({ type: "state", state })
+}
 
-	// claude messages to present in the webview
+async clearTask() {
+	this.claudeDev?.abortTask()
+	this.claudeDev = undefined // removes reference to it, so once promises end it will be garbage collected
+}
 
-	// getClaudeMessages(): ClaudeMessage[] {
-	// 	// const messages = (await this.getGlobalState(this.getClaudeMessagesStateKey())) as ClaudeMessage[]
-	// 	// return messages || []
-	// 	return this.claudeMessages
-	// }
+// Caching mechanism to keep track of webview messages + API conversation history per provider instance
 
-	// setClaudeMessages(messages: ClaudeMessage[] | undefined) {
-	// 	// await this.updateGlobalState(this.getClaudeMessagesStateKey(), messages)
-	// 	this.claudeMessages = messages || []
-	// }
+/*
+Now that we use retainContextWhenHidden, we don't have to store a cache of claude messages in the user's state, but we could to reduce memory footprint in long conversations.
 
-	// addClaudeMessage(message: ClaudeMessage): ClaudeMessage[] {
-	// 	// const messages = await this.getClaudeMessages()
-	// 	// messages.push(message)
-	// 	// await this.setClaudeMessages(messages)
-	// 	// return messages
-	// 	this.claudeMessages.push(message)
-	// 	return this.claudeMessages
-	// }
+- We have to be careful of what state is shared between ClaudeDevProvider instances since there could be multiple instances of the extension running at once. For example when we cached claude messages using the same key, two instances of the extension could end up using the same key and overwriting each other's messages.
+- Some state does need to be shared between the instances, i.e. the API key--however there doesn't seem to be a good way to notfy the other instances that the API key has changed.
 
-	// conversation history to send in API requests
+We need to use a unique identifier for each ClaudeDevProvider instance's message cache since we could be running several instances of the extension outside of just the sidebar i.e. in editor panels.
 
-	/*
-	It seems that some API messages do not comply with vscode state requirements. Either the Anthropic library is manipulating these values somehow in the backend in a way thats creating cyclic references, or the API returns a function or a Symbol as part of the message content.
-	VSCode docs about state: "The value must be JSON-stringifyable ... value — A value. MUST not contain cyclic references."
-	For now we'll store the conversation history in memory, and if we need to store in state directly we'd need to do a manual conversion to ensure proper json stringification.
-	*/
+For now since we don't need to store task history, we'll just use an identifier unique to this provider instance (since there can be several provider instances open at once).
+However in the future when we implement task history, we'll need to use a unique identifier for each task. As well as manage a data structure that keeps track of task history with their associated identifiers and the task message itself, to present in a 'Task History' view.
+Task history is a significant undertaking as it would require refactoring how we wait for ask responses--it would need to be a hidden claudeMessage, so that user's can resume tasks that ended with an ask.
+*/
+// private providerInstanceIdentifier = Date.now()
+// getClaudeMessagesStateKey() {
+// 	return `claudeMessages-${this.providerInstanceIdentifier}`
+// }
 
-	// getApiConversationHistory(): Anthropic.MessageParam[] {
-	// 	// const history = (await this.getGlobalState(
-	// 	// 	this.getApiConversationHistoryStateKey()
-	// 	// )) as Anthropic.MessageParam[]
-	// 	// return history || []
-	// 	return this.apiConversationHistory
-	// }
+// getApiConversationHistoryStateKey() {
+// 	return `apiConversationHistory-${this.providerInstanceIdentifier}`
+// }
 
-	// setApiConversationHistory(history: Anthropic.MessageParam[] | undefined) {
-	// 	// await this.updateGlobalState(this.getApiConversationHistoryStateKey(), history)
-	// 	this.apiConversationHistory = history || []
-	// }
+// claude messages to present in the webview
 
-	// addMessageToApiConversationHistory(message: Anthropic.MessageParam): Anthropic.MessageParam[] {
-	// 	// const history = await this.getApiConversationHistory()
-	// 	// history.push(message)
-	// 	// await this.setApiConversationHistory(history)
-	// 	// return history
-	// 	this.apiConversationHistory.push(message)
-	// 	return this.apiConversationHistory
-	// }
+// getClaudeMessages(): ClaudeMessage[] {
+// 	// const messages = (await this.getGlobalState(this.getClaudeMessagesStateKey())) as ClaudeMessage[]
+// 	// return messages || []
+// 	return this.claudeMessages
+// }
 
-	/*
-	Storage
-	https://dev.to/kompotkot/how-to-use-secretstorage-in-your-vscode-extensions-2hco
-	https://www.eliostruyf.com/devhack-code-extension-storage-options/
-	*/
+// setClaudeMessages(messages: ClaudeMessage[] | undefined) {
+// 	// await this.updateGlobalState(this.getClaudeMessagesStateKey(), messages)
+// 	this.claudeMessages = messages || []
+// }
+
+// addClaudeMessage(message: ClaudeMessage): ClaudeMessage[] {
+// 	// const messages = await this.getClaudeMessages()
+// 	// messages.push(message)
+// 	// await this.setClaudeMessages(messages)
+// 	// return messages
+// 	this.claudeMessages.push(message)
+// 	return this.claudeMessages
+// }
+
+// conversation history to send in API requests
+
+/*
+It seems that some API messages do not comply with vscode state requirements. Either the Anthropic library is manipulating these values somehow in the backend in a way thats creating cyclic references, or the API returns a function or a Symbol as part of the message content.
+VSCode docs about state: "The value must be JSON-stringifyable ... value — A value. MUST not contain cyclic references."
+For now we'll store the conversation history in memory, and if we need to store in state directly we'd need to do a manual conversion to ensure proper json stringification.
+*/
+
+// getApiConversationHistory(): Anthropic.MessageParam[] {
+// 	// const history = (await this.getGlobalState(
+// 	// 	this.getApiConversationHistoryStateKey()
+// 	// )) as Anthropic.MessageParam[]
+// 	// return history || []
+// 	return this.apiConversationHistory
+// }
+
+// setApiConversationHistory(history: Anthropic.MessageParam[] | undefined) {
+// 	// await this.updateGlobalState(this.getApiConversationHistoryStateKey(), history)
+// 	this.apiConversationHistory = history || []
+// }
+
+// addMessageToApiConversationHistory(message: Anthropic.MessageParam): Anthropic.MessageParam[] {
+// 	// const history = await this.getApiConversationHistory()
+// 	// history.push(message)
+// 	// await this.setApiConversationHistory(history)
+// 	// return history
+// 	this.apiConversationHistory.push(message)
+// 	return this.apiConversationHistory
+// }
+
+/*
+Storage
+https://dev.to/kompotkot/how-to-use-secretstorage-in-your-vscode-extensions-2hco
+https://www.eliostruyf.com/devhack-code-extension-storage-options/
+*/
 
 	async getState() {
 		const [
@@ -611,6 +590,7 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 			customInstructions,
 			alwaysAllowReadOnly,
 			taskHistory,
+			automaticallyRunTasks,
 		] = await Promise.all([
 			this.getGlobalState("apiProvider") as Promise<ApiProvider | undefined>,
 			this.getGlobalState("apiModelId") as Promise<ApiModelId | undefined>,
@@ -626,18 +606,16 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 			this.getGlobalState("customInstructions") as Promise<string | undefined>,
 			this.getGlobalState("alwaysAllowReadOnly") as Promise<boolean | undefined>,
 			this.getGlobalState("taskHistory") as Promise<HistoryItem[] | undefined>,
+			this.getGlobalState("automaticallyRunTasks") as Promise<boolean | undefined>,
 		])
 
 		let apiProvider: ApiProvider
 		if (storedApiProvider) {
 			apiProvider = storedApiProvider
 		} else {
-			// Either new user or legacy user that doesn't have the apiProvider stored in state
-			// (If they're using OpenRouter or Bedrock, then apiProvider state will exist)
 			if (apiKey) {
 				apiProvider = "anthropic"
 			} else {
-				// New users should default to anthropic
 				apiProvider = "anthropic"
 			}
 		}
@@ -659,6 +637,7 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 			customInstructions,
 			alwaysAllowReadOnly: alwaysAllowReadOnly ?? false,
 			taskHistory,
+			automaticallyRunTasks: automaticallyRunTasks ?? false,
 		}
 	}
 
@@ -674,7 +653,7 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 		return history
 	}
 
-	// global
+
 
 	private async updateGlobalState(key: GlobalStateKey, value: any) {
 		await this.context.globalState.update(key, value)
@@ -693,18 +672,6 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 	private async getWorkspaceState(key: string) {
 		return await this.context.workspaceState.get(key)
 	}
-
-	// private async clearState() {
-	// 	this.context.workspaceState.keys().forEach((key) => {
-	// 		this.context.workspaceState.update(key, undefined)
-	// 	})
-	// 	this.context.globalState.keys().forEach((key) => {
-	// 		this.context.globalState.update(key, undefined)
-	// 	})
-	// 	this.context.secrets.delete("apiKey")
-	// }
-
-	// secrets
 
 	private async storeSecret(key: SecretKey, value?: string) {
 		if (value) {
@@ -736,5 +703,31 @@ export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 		vscode.window.showInformationMessage("State reset")
 		await this.postStateToWebview()
 		await this.postMessageToWebview({ type: "action", action: "chatButtonTapped" })
+	}
+
+
+	async getStateToPostToWebview() {
+		const {
+			apiConfiguration,
+			maxRequestsPerTask,
+			lastShownAnnouncementId,
+			customInstructions,
+			alwaysAllowReadOnly,
+			taskHistory,
+			automaticallyRunTasks,
+		} = await this.getState()
+		return {
+			version: this.context.extension?.packageJSON?.version ?? "",
+			apiConfiguration,
+			maxRequestsPerTask,
+			customInstructions,
+			alwaysAllowReadOnly,
+			themeName: vscode.workspace.getConfiguration("workbench").get<string>("colorTheme"),
+			uriScheme: vscode.env.uriScheme,
+			claudeMessages: this.claudeDev?.claudeMessages || [],
+			taskHistory: (taskHistory || []).filter((item) => item.ts && item.task).sort((a, b) => b.ts - a.ts),
+			shouldShowAnnouncement: lastShownAnnouncementId !== this.latestAnnouncementId,
+			automaticallyRunTasks,
+		}
 	}
 }

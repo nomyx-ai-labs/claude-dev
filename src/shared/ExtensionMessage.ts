@@ -18,6 +18,7 @@ export interface ExtensionState {
 	maxRequestsPerTask?: number
 	customInstructions?: string
 	alwaysAllowReadOnly?: boolean
+	automaticallyRunTasks?: boolean
 	themeName?: string
 	uriScheme?: string
 	claudeMessages: ClaudeMessage[]
@@ -60,11 +61,11 @@ export type ClaudeSay =
 
 export interface ClaudeSayTool {
 	tool:
-		| "editedExistingFile"
+		| "editedExistingFile"   
 		| "newFileCreated"
 		| "readFile"
 		| "listFilesTopLevel"
-		| "listFilesRecursive"
+		| "listFilesRecursive" 
 		| "listCodeDefinitionNames"
 		| "searchFiles"
 	path?: string
