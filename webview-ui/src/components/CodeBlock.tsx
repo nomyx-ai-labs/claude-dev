@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import React, { useMemo, useState, useEffect } from "react"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { getLanguageFromPath } from "../utils/getLanguageFromPath"
 import { SyntaxHighlighterStyle } from "../utils/getSyntaxHighlighterStyleFromTheme"
@@ -57,6 +57,7 @@ const tokenStyles = {
 }
 */
 
+
 interface CodeBlockProps {
 	code?: string
 	diff?: string
@@ -65,6 +66,7 @@ interface CodeBlockProps {
 	syntaxHighlighterStyle: SyntaxHighlighterStyle
 	isExpanded: boolean
 	onToggleExpand: () => void
+	onApprove?: () => void
 }
 
 const CodeBlock = ({
@@ -75,14 +77,11 @@ const CodeBlock = ({
 	syntaxHighlighterStyle,
 	isExpanded,
 	onToggleExpand,
+	onApprove,
 }: CodeBlockProps) => {
-	/*
-    We need to remove leading non-alphanumeric characters from the path in order for our leading ellipses trick to work.
+	const [isApproved, setIsApproved] = useState(false);
+	const [countdown, setCountdown] = useState(3);
 
-    ^: Anchors the match to the start of the string.
-    [^a-zA-Z0-9]+: Matches one or more characters that are not alphanumeric.
-    The replace method removes these matched characters, effectively trimming the string up to the first alphanumeric character.
-    */
 	const removeLeadingNonAlphanumeric = (path: string): string => path.replace(/^[^a-zA-Z0-9]+/, "")
 
 	const inferredLanguage = useMemo(
@@ -90,12 +89,30 @@ const CodeBlock = ({
 		[path, language, code]
 	)
 
+	useEffect(() => {
+		if (diff && !isApproved) {
+			const timer = setInterval(() => {
+				setCountdown((prevCountdown) => {
+					if (prevCountdown === 1) {
+						clearInterval(timer);
+						setIsApproved(true);
+						onApprove && onApprove();
+						return 0;
+					}
+					return prevCountdown - 1;
+				});
+			}, 1000);
+
+			return () => clearInterval(timer);
+		}
+	}, [diff, isApproved, onApprove]);
+
 	return (
 		<div
 			style={{
 				borderRadius: "3px",
 				backgroundColor: "var(--vscode-editor-background)",
-				overflow: "hidden", // This ensures the inner scrollable area doesn't overflow the rounded corners
+				overflow: "hidden",
 				border: "1px solid var(--vscode-editorGroup-border)",
 			}}>
 			{path && (
@@ -116,7 +133,6 @@ const CodeBlock = ({
 							textOverflow: "ellipsis",
 							marginRight: "8px",
 							fontSize: "11px",
-							// trick to get ellipsis at beginning of string
 							direction: "rtl",
 							textAlign: "left",
 						}}>
@@ -126,44 +142,43 @@ const CodeBlock = ({
 				</div>
 			)}
 			{(!path || isExpanded) && (
-				<div
-					//className="code-block-scrollable" this doesn't seem to be necessary anymore, on silicon macs it shows the native mac scrollbar instead of the vscode styled one
-					style={{
-						overflowX: "auto",
-						overflowY: "hidden",
-						maxWidth: "100%",
-					}}>
-					<SyntaxHighlighter
-						wrapLines={false}
-						language={diff ? "diff" : inferredLanguage} // "diff" automatically colors changed lines in green/red
+				<>
+					{diff && (
+						<div style={{ padding: "6px 10px", backgroundColor: "var(--vscode-editorInfo-background)", color: "var(--vscode-editorInfo-foreground)" }}>
+							{isApproved ? "Changes automatically approved" : `Approving changes in ${countdown} seconds...`}
+						</div>
+					)}
+					<div
 						style={{
-							...syntaxHighlighterStyle,
-							// Our syntax highlighter style doesn't always match the vscode theme 1:1, so we'll apply sensible styles here that vscode exposes to us
-							'code[class*="language-"]': {
-								background: "var(--vscode-editor-background)",
-							},
-							'pre[class*="language-"]': {
-								background: "var(--vscode-editor-background)",
-							},
-						}}
-						customStyle={{
-							margin: 0,
-							padding: "6px 10px",
-							/*
-							overflowX: auto + inner div with padding results in an issue where the top/left/bottom padding renders but the right padding inside does not count as overflow as the width of the element is not exceeded. Once the inner div is outside the boundaries of the parent it counts as overflow.
-							https://stackoverflow.com/questions/60778406/why-is-padding-right-clipped-with-overflowscroll/77292459#77292459
-							this fixes the issue of right padding clipped off 
-							“ideal” size in a given axis when given infinite available space--allows the syntax highlighter to grow to largest possible width including its padding
-							*/
-							minWidth: "max-content",
-							borderRadius: 0,
-							fontSize: "var(--vscode-editor-font-size)",
-							lineHeight: "var(--vscode-editor-line-height)",
-							fontFamily: "var(--vscode-editor-font-family)",
+							overflowX: "auto",
+							overflowY: "hidden",
+							maxWidth: "100%",
 						}}>
-						{code ?? diff ?? ""}
-					</SyntaxHighlighter>
-				</div>
+						<SyntaxHighlighter
+							wrapLines={false}
+							language={diff ? "diff" : inferredLanguage}
+							style={{
+								...syntaxHighlighterStyle,
+								'code[class*="language-"]': {
+									background: "var(--vscode-editor-background)",
+								},
+								'pre[class*="language-"]': {
+									background: "var(--vscode-editor-background)",
+								},
+							}}
+							customStyle={{
+								margin: 0,
+								padding: "6px 10px",
+								minWidth: "max-content",
+								borderRadius: 0,
+								fontSize: "var(--vscode-editor-font-size)",
+								lineHeight: "var(--vscode-editor-line-height)",
+								fontFamily: "var(--vscode-editor-font-family)",
+							}}>
+							{code ?? diff ?? ""}
+						</SyntaxHighlighter>
+					</div>
+				</>
 			)}
 		</div>
 	)

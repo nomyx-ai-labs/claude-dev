@@ -11,7 +11,7 @@ export interface ApiHandlerOptions {
 	vertexRegion?: string
 	azureApiKey?: string
 	azureEndpoint?: string
-	azureDeploymentId?: string
+	azureOpenAIDeployment?: string
 	azureRegion?: string
 }
 

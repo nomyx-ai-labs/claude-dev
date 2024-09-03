@@ -17,6 +17,7 @@ interface ChatRowProps {
 	lastModifiedMessage?: ClaudeMessage
 	isLast: boolean
 	apiProvider?: ApiProvider
+	onApprove: (tool: ClaudeSayTool) => void
 }
 
 const ChatRow: React.FC<ChatRowProps> = ({
@@ -27,6 +28,7 @@ const ChatRow: React.FC<ChatRowProps> = ({
 	lastModifiedMessage,
 	isLast,
 	apiProvider,
+	onApprove,
 }) => {
 	const cost = message.text != null && message.say === "api_req_started" ? JSON.parse(message.text).cost : undefined
 	const apiRequestFailedMessage =
@@ -521,6 +523,7 @@ const ChatRow: React.FC<ChatRowProps> = ({
 							syntaxHighlighterStyle={syntaxHighlighterStyle}
 							isExpanded={isExpanded}
 							onToggleExpand={onToggleExpand}
+							onApprove={() => onApprove(tool)}
 						/>
 					</>
 				)
@@ -537,9 +540,11 @@ const ChatRow: React.FC<ChatRowProps> = ({
 							syntaxHighlighterStyle={syntaxHighlighterStyle}
 							isExpanded={isExpanded}
 							onToggleExpand={onToggleExpand}
+							onApprove={() => onApprove(tool)}
 						/>
 					</>
 				)
+			// ... (rest of the cases remain unchanged)
 			case "readFile":
 				return (
 					<>
@@ -651,8 +656,6 @@ const ChatRow: React.FC<ChatRowProps> = ({
 				return null
 		}
 	}
-
-	// NOTE: we cannot return null as virtuoso does not support it, so we must use a separate visibleMessages array to filter out messages that should not be rendered
 
 	return (
 		<div

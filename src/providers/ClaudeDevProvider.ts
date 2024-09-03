@@ -9,7 +9,7 @@ import * as path from "path"
 import fs from "fs/promises"
 import { HistoryItem } from "../shared/HistoryItem"
 
-type SecretKey = "apiKey" | "openRouterApiKey" | "awsAccessKey" | "awsSecretKey"
+type SecretKey = "apiKey" | "openRouterApiKey" | "awsAccessKey" | "awsSecretKey" | "azureApiKey"
 type GlobalStateKey =
 	| "apiProvider"
 	| "apiModelId"
@@ -22,6 +22,8 @@ type GlobalStateKey =
 	| "alwaysAllowReadOnly"
 	| "taskHistory"
 	| "automaticallyRunTasks"
+	| "azureEndpoint"
+	| "azureOpenAIDeployment"
 
 export class ClaudeDevProvider implements vscode.WebviewViewProvider {
 	public static readonly sideBarId = "claude-dev.SidebarProvider"
@@ -203,7 +205,6 @@ async postMessageToWebview(message: ExtensionMessage) {
  * are created and inserted into the webview HTML.
  *
  * @param webview A reference to the extension webview
- * @param extensionUri The URI of the directory containing the extension
  * @returns A template string literal containing the HTML that should be
  * rendered within the webview panel
  */
@@ -314,6 +315,9 @@ private getHtmlContent(webview: vscode.Webview): string {
 								awsRegion,
 								vertexProjectId,
 								vertexRegion,
+								azureApiKey,
+								azureEndpoint,
+								azureOpenAIDeployment,
 							} = message.apiConfiguration
 							await this.updateGlobalState("apiProvider", apiProvider)
 							await this.updateGlobalState("apiModelId", apiModelId)
@@ -324,6 +328,9 @@ private getHtmlContent(webview: vscode.Webview): string {
 							await this.updateGlobalState("awsRegion", awsRegion)
 							await this.updateGlobalState("vertexProjectId", vertexProjectId)
 							await this.updateGlobalState("vertexRegion", vertexRegion)
+							await this.storeSecret("azureApiKey", azureApiKey)
+							await this.updateGlobalState("azureEndpoint", azureEndpoint)
+							await this.updateGlobalState("azureOpenAIDeployment", azureOpenAIDeployment)
 							this.claudeDev?.updateApi(message.apiConfiguration)
 						}
 						await this.postStateToWebview()
@@ -493,87 +500,6 @@ async clearTask() {
 	this.claudeDev = undefined // removes reference to it, so once promises end it will be garbage collected
 }
 
-// Caching mechanism to keep track of webview messages + API conversation history per provider instance
-
-/*
-Now that we use retainContextWhenHidden, we don't have to store a cache of claude messages in the user's state, but we could to reduce memory footprint in long conversations.
-
-- We have to be careful of what state is shared between ClaudeDevProvider instances since there could be multiple instances of the extension running at once. For example when we cached claude messages using the same key, two instances of the extension could end up using the same key and overwriting each other's messages.
-- Some state does need to be shared between the instances, i.e. the API key--however there doesn't seem to be a good way to notfy the other instances that the API key has changed.
-
-We need to use a unique identifier for each ClaudeDevProvider instance's message cache since we could be running several instances of the extension outside of just the sidebar i.e. in editor panels.
-
-For now since we don't need to store task history, we'll just use an identifier unique to this provider instance (since there can be several provider instances open at once).
-However in the future when we implement task history, we'll need to use a unique identifier for each task. As well as manage a data structure that keeps track of task history with their associated identifiers and the task message itself, to present in a 'Task History' view.
-Task history is a significant undertaking as it would require refactoring how we wait for ask responses--it would need to be a hidden claudeMessage, so that user's can resume tasks that ended with an ask.
-*/
-// private providerInstanceIdentifier = Date.now()
-// getClaudeMessagesStateKey() {
-// 	return `claudeMessages-${this.providerInstanceIdentifier}`
-// }
-
-// getApiConversationHistoryStateKey() {
-// 	return `apiConversationHistory-${this.providerInstanceIdentifier}`
-// }
-
-// claude messages to present in the webview
-
-// getClaudeMessages(): ClaudeMessage[] {
-// 	// const messages = (await this.getGlobalState(this.getClaudeMessagesStateKey())) as ClaudeMessage[]
-// 	// return messages || []
-// 	return this.claudeMessages
-// }
-
-// setClaudeMessages(messages: ClaudeMessage[] | undefined) {
-// 	// await this.updateGlobalState(this.getClaudeMessagesStateKey(), messages)
-// 	this.claudeMessages = messages || []
-// }
-
-// addClaudeMessage(message: ClaudeMessage): ClaudeMessage[] {
-// 	// const messages = await this.getClaudeMessages()
-// 	// messages.push(message)
-// 	// await this.setClaudeMessages(messages)
-// 	// return messages
-// 	this.claudeMessages.push(message)
-// 	return this.claudeMessages
-// }
-
-// conversation history to send in API requests
-
-/*
-It seems that some API messages do not comply with vscode state requirements. Either the Anthropic library is manipulating these values somehow in the backend in a way thats creating cyclic references, or the API returns a function or a Symbol as part of the message content.
-VSCode docs about state: "The value must be JSON-stringifyable ... value — A value. MUST not contain cyclic references."
-For now we'll store the conversation history in memory, and if we need to store in state directly we'd need to do a manual conversion to ensure proper json stringification.
-*/
-
-// getApiConversationHistory(): Anthropic.MessageParam[] {
-// 	// const history = (await this.getGlobalState(
-// 	// 	this.getApiConversationHistoryStateKey()
-// 	// )) as Anthropic.MessageParam[]
-// 	// return history || []
-// 	return this.apiConversationHistory
-// }
-
-// setApiConversationHistory(history: Anthropic.MessageParam[] | undefined) {
-// 	// await this.updateGlobalState(this.getApiConversationHistoryStateKey(), history)
-// 	this.apiConversationHistory = history || []
-// }
-
-// addMessageToApiConversationHistory(message: Anthropic.MessageParam): Anthropic.MessageParam[] {
-// 	// const history = await this.getApiConversationHistory()
-// 	// history.push(message)
-// 	// await this.setApiConversationHistory(history)
-// 	// return history
-// 	this.apiConversationHistory.push(message)
-// 	return this.apiConversationHistory
-// }
-
-/*
-Storage
-https://dev.to/kompotkot/how-to-use-secretstorage-in-your-vscode-extensions-2hco
-https://www.eliostruyf.com/devhack-code-extension-storage-options/
-*/
-
 	async getState() {
 		const [
 			storedApiProvider,
@@ -591,6 +517,9 @@ https://www.eliostruyf.com/devhack-code-extension-storage-options/
 			alwaysAllowReadOnly,
 			taskHistory,
 			automaticallyRunTasks,
+			azureApiKey,
+			azureEndpoint,
+			azureOpenAIDeployment,
 		] = await Promise.all([
 			this.getGlobalState("apiProvider") as Promise<ApiProvider | undefined>,
 			this.getGlobalState("apiModelId") as Promise<ApiModelId | undefined>,
@@ -607,6 +536,9 @@ https://www.eliostruyf.com/devhack-code-extension-storage-options/
 			this.getGlobalState("alwaysAllowReadOnly") as Promise<boolean | undefined>,
 			this.getGlobalState("taskHistory") as Promise<HistoryItem[] | undefined>,
 			this.getGlobalState("automaticallyRunTasks") as Promise<boolean | undefined>,
+			this.getSecret("azureApiKey") as Promise<string | undefined>,
+			this.getGlobalState("azureEndpoint") as Promise<string | undefined>,
+			this.getGlobalState("azureOpenAIDeployment") as Promise<string | undefined>,
 		])
 
 		let apiProvider: ApiProvider
@@ -631,6 +563,9 @@ https://www.eliostruyf.com/devhack-code-extension-storage-options/
 				awsRegion,
 				vertexProjectId,
 				vertexRegion,
+				azureApiKey,
+				azureEndpoint,
+				azureOpenAIDeployment,
 			},
 			maxRequestsPerTask,
 			lastShownAnnouncementId,
@@ -692,7 +627,7 @@ https://www.eliostruyf.com/devhack-code-extension-storage-options/
 		for (const key of this.context.globalState.keys()) {
 			await this.context.globalState.update(key, undefined)
 		}
-		const secretKeys: SecretKey[] = ["apiKey", "openRouterApiKey", "awsAccessKey", "awsSecretKey"]
+		const secretKeys: SecretKey[] = ["apiKey", "openRouterApiKey", "awsAccessKey", "awsSecretKey", "azureApiKey"]
 		for (const key of secretKeys) {
 			await this.storeSecret(key, undefined)
 		}

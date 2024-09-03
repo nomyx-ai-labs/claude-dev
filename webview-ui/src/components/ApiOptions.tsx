@@ -247,6 +247,13 @@ const ApiOptions: React.FC<ApiOptionsProps> = ({ showModelOptions, apiErrorMessa
 						placeholder="Enter Azure OpenAI Endpoint...">
 						<span style={{ fontWeight: 500 }}>Azure OpenAI Endpoint</span>
 					</VSCodeTextField>
+					<VSCodeTextField
+						value={apiConfiguration?.azureOpenAIDeployment || ""}
+						style={{ width: "100%" }}
+						onInput={handleInputChange("azureOpenAIDeployment")}
+						placeholder="Enter Azure OpenAI Deployment Name...">
+						<span style={{ fontWeight: 500 }}>Azure OpenAI Deployment</span>
+					</VSCodeTextField>
 					<p
 						style={{
 							fontSize: "12px",
